@@ -11,6 +11,7 @@ def fetch(day1,day2,kind,key,max_pages):
     start=datetime.datetime.strptime(day1,"%Y%m%d").strftime("%Y%m%d")+"0000"
     end=datetime.datetime.strptime(day2,"%Y%m%d").strftime("%Y%m%d")+"2359"
     out=[]
+    seen=set()
     for page in range(1,max_pages+1):
         query={"serviceKey":key,"pageNo":page,"numOfRows":100,"type":"json","inqryDiv":1,"inqryBgnDt":start,"inqryEndDt":end}
         url=ROOT+"/"+OPS[kind]+"?"+urllib.parse.urlencode(query)
@@ -27,8 +28,13 @@ def fetch(day1,day2,kind,key,max_pages):
         rows=body.get("items",[])
         if isinstance(rows,dict): rows=rows.get("item",[])
         if isinstance(rows,dict): rows=[rows]
+        if not isinstance(rows,list): raise RuntimeError('Unexpected G2B items shape')
         if not rows: break
         for row in rows:
+            if not isinstance(row,dict): continue
+            identity=(str(row.get('bidNtceNo','')),str(row.get('bidNtceOrd','')))
+            if identity != ('','') and identity in seen: continue
+            seen.add(identity)
             out.append({"title":row.get("bidNtceNm",""),"agency":row.get("ntceInsttNm",""),
                 "region":"","amount":row.get("presmptPrce",""),
                 "deadline":row.get("bidClseDt",""),"url":row.get("bidNtceDtlUrl",""),
@@ -48,6 +54,11 @@ def main():
     args=parser.parse_args()
     key=os.environ.get("G2B_SERVICE_KEY")
     if not key:sys.exit("Missing G2B_SERVICE_KEY; apply for key at data.go.kr first.")
+    try:
+        datetime.datetime.strptime(args.from_date,'%Y%m%d')
+        datetime.datetime.strptime(args.to_date,'%Y%m%d')
+    except ValueError:
+        sys.exit('Dates must use YYYYMMDD')
     if args.from_date>args.to_date:sys.exit("Invalid date range")
     data=fetch(args.from_date,args.to_date,args.kind,key,max(1,min(100,args.max_pages)))
     with open(args.output,"w",encoding="utf-8") as f:json.dump(data,f,ensure_ascii=False,indent=2)
