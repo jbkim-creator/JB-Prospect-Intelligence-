@@ -140,7 +140,11 @@ def export(result, directory):
 
 def run(input_file, out):
     raw = Path(input_file).read_text(encoding='utf-8')
-    if len(raw) > 100000:
+    return run_raw(raw, out)
+
+
+def run_raw(raw, out):
+    if len(raw.encode('utf-8')) > 100000:
         raise ValueError('100KB limit; attachments are not processed.')
     result = build(raw)
     directory = Path(out) / result['request_id']
