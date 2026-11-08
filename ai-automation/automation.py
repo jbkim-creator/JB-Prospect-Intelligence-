@@ -46,12 +46,15 @@ def parse_email(raw):
     return message, text
 
 
-def build(raw):
+def build(raw, catalog=None, catalog_id='SYNTHETIC-DEMO-v1', synthetic=True):
+    catalog = CATALOG if catalog is None else catalog
     message, body = parse_email(raw)
     issues, lines = [], []
     # Deliberately small deterministic extraction; a future LLM adapter is separate.
     for source in body.splitlines():
-        codes = re.findall(r'\bDEMO-[A-Z]\d{2}\b', source)
+        known = [code for code in catalog if re.search(r'(?<![A-Za-z0-9_-])' + re.escape(code) + r'(?![A-Za-z0-9_-])', source)]
+        unknown = re.findall(r'\b[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+\b', source)
+        codes = list(dict.fromkeys(known + unknown))
         quantities = re.findall(r'(?<![\d.,])([+-]?\d[\d,]*)\s*개', source)
         if not codes:
             if quantities:
@@ -64,19 +67,19 @@ def build(raw):
             issues.append('수량 표기 오류: ' + mask(source))
             continue
         code, qty = codes[0], int(quantities[0].replace(',', ''))
-        if code not in CATALOG or qty <= 0 or qty > 100000:
+        if code not in catalog or qty <= 0 or qty > 100000:
             issues.append('미등록 상품 또는 수량 범위 오류: ' + mask(source))
             continue
-        item = CATALOG[code]
+        item = catalog[code]
         tiers = [price for threshold, price in item['tiers'] if qty >= threshold]
         if not tiers:
             issues.append('최소수량 미달: ' + code)
             continue
-        printing = re.search(r'인쇄\s*:\s*(없음|1도)', source)
-        if not printing:
+        options = re.findall(r'인쇄\s*:\s*(없음|1도)(?![A-Za-z0-9가-힣])', source)
+        if len(options) != 1:
             issues.append('인쇄 옵션 확인 필요: ' + code)
             continue
-        printed = printing.group(1) == '1도'
+        printed = options[0] == '1도'
         unit = tiers[-1]
         print_each = item['print_each'] if printed else 0
         setup = item['setup'] if printed else 0
@@ -103,7 +106,7 @@ def build(raw):
     key = str(message.get('Message-ID', '')).strip() or hashlib.sha256(raw.encode()).hexdigest()
     return {'schema': 1, 'request_id': hashlib.sha256(key.encode()).hexdigest()[:20],
             'status': 'BLOCKED' if issues else 'REVIEW_REQUIRED',
-            'catalog': 'SYNTHETIC-DEMO-v1', 'requested_delivery': requested_date,
+            'catalog': catalog_id, 'synthetic': synthetic, 'requested_delivery': requested_date,
             'delivery_confirmed': False, 'stock_confirmed': False,
             'issues': issues, 'items': lines, 'net': net, 'vat': vat,
             'total': net + vat if net is not None else None,
@@ -129,12 +132,12 @@ def export(result, directory):
     rows = ''.join('<tr>' + ''.join('<td>' + esc(x[k]) + '</td>' for k in ['product', 'quantity', 'unit_price', 'print_each', 'setup', 'net']) + '</tr>' for x in result['items'])
     quote = f'''<!doctype html><html lang="ko"><meta charset="utf-8"><title>JB 견적 검토본</title>
 <style>body{{font:16px system-ui;max-width:1000px;margin:48px auto;color:#183047}}h1{{color:#135d61}}table{{border-collapse:collapse;width:100%}}td,th{{padding:14px;border-bottom:1px solid #ccd8df;text-align:left}}aside{{background:#fff1cf;padding:18px}}small{{color:#536a78}}</style>
-<h1>JB AI Automation · 견적 검토본</h1><aside>합성 데이터 데모 / {esc(result['status'])} / 확정 주문이 아닙니다. 재고·납기·배송비는 담당자 확인이 필요합니다.</aside>
+<h1>JB AI Automation · 견적 검토본</h1><aside>{'합성 데이터 데모' if result.get('synthetic', True) else '고객 단가표 검토본'} / {esc(result['status'])} / 확정 주문이 아닙니다. 재고·납기·배송비는 담당자 확인이 필요합니다.</aside>
 <p>요청 ID {esc(result['request_id'])} · 요청 납기 {esc(result['requested_delivery'])}</p>
 <table><tr><th>상품</th><th>수량</th><th>단가</th><th>개당 인쇄비</th><th>판비</th><th>공급가</th></tr>{rows}</table>
 <p>공급가 {esc(result['net'])}원 · VAT {esc(result['vat'])}원 · 합계 {esc(result['total'])}원 (배송비 미포함)</p>
 <p>검토사항: {esc(' / '.join(result['issues']) or '단가표 유효성, 재고, 시안, 납기, 배송비 승인')}</p>
-<small>가격은 실제 업체 가격이 아닌 가상 단가표입니다. 이메일·거래처 데이터 외부 전송 없음.</small></html>'''
+<small>단가표: {esc(result['catalog'])}. {'가상 가격입니다.' if result.get('synthetic', True) else '고객이 제공한 가격이며 유효성 확인이 필요합니다.'} {esc(result.get('processing_note', '로컬 규칙 기반 처리, 외부 전송 없음.'))}</small></html>'''
     (directory / 'quote.html').write_text(quote, encoding='utf-8')
 
 
@@ -143,10 +146,10 @@ def run(input_file, out):
     return run_raw(raw, out)
 
 
-def run_raw(raw, out):
+def run_raw(raw, out, **catalog_options):
     if len(raw.encode('utf-8')) > 100000:
         raise ValueError('100KB limit; attachments are not processed.')
-    result = build(raw)
+    result = build(raw, **catalog_options)
     directory = Path(out) / result['request_id']
     # Persisted idempotency: same Message-ID cannot create a second order.
     directory.parent.mkdir(parents=True, exist_ok=True)
