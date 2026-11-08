@@ -42,7 +42,8 @@ class DemoApp:
         shell = ttk.Frame(root, padding=24)
         shell.pack(fill='both', expand=True)
         ttk.Label(shell, text='메일 문의를 견적 검토본으로', font=('Malgun Gothic', 20, 'bold')).pack(anchor='w')
-        ttk.Label(shell, text='규칙 기반 · 가상 단가표 · 외부 전송 없음', foreground='#1b6664').pack(anchor='w', pady=(4, 12))
+        self.catalog_label = tk.StringVar(value='규칙 기반 · 가상 단가표 · 외부 전송 없음')
+        ttk.Label(shell, textvariable=self.catalog_label, foreground='#1b6664').pack(anchor='w', pady=(4, 12))
         ttk.Label(shell, text='합성 샘플로 시연하세요. 실제 고객의 이름·주소·연락처·기밀은 입력 전에 제거하세요.').pack(anchor='w')
         toolbar = ttk.Frame(shell)
         toolbar.pack(fill='x', pady=12)
@@ -88,6 +89,12 @@ class DemoApp:
             result = build(as_email(body), **self.catalog_options)
         except (ValueError, UnicodeError) as error:
             self.result = None
+            self.reviewed_body = None
+            for row in self.table.get_children():
+                self.table.delete(row)
+            self.totals.set('')
+            self.notes.set('입력 오류를 수정한 뒤 다시 검토하세요.')
+            self.status.set('입력 오류 · 이전 계산 결과를 지웠습니다.')
             messagebox.showerror('입력 확인', str(error), parent=self.root)
             return
         self.result, self.reviewed_body = result, body
@@ -124,6 +131,7 @@ class DemoApp:
             messagebox.showerror('단가표 오류', str(error), parent=self.root)
             return
         self.catalog_options = {'catalog': data['products'], 'catalog_id': data['id'], 'synthetic': data['synthetic']}
+        self.catalog_label.set('규칙 기반 · ' + ('가상 단가표' if data['synthetic'] else '고객 단가표') + ' · 외부 전송 없음')
         self.result = None
         self.reviewed_body = None
         self.status.set('단가표 변경: ' + data['id'] + ' · 본문을 다시 검토하세요.')
