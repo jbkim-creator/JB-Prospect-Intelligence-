@@ -2,6 +2,7 @@ outputs/
 ai-outputs/
 *.private.json
 후속연락_*.md
+검증보고서_*.md
 __pycache__/
 .env
 *.local.eml
