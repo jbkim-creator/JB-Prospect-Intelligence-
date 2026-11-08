@@ -52,13 +52,16 @@ def build(raw):
     # Deliberately small deterministic extraction; a future LLM adapter is separate.
     for source in body.splitlines():
         codes = re.findall(r'\bDEMO-[A-Z]\d{2}\b', source)
-        quantities = re.findall(r'(?<![\d.,])(\d[\d,]*)\s*개', source)
+        quantities = re.findall(r'(?<![\d.,])([+-]?\d[\d,]*)\s*개', source)
         if not codes:
             if quantities:
                 issues.append('상품코드 없는 수량 요청: ' + mask(source))
             continue
         if len(codes) != 1 or len(quantities) != 1:
             issues.append('상품 또는 수량 모호: ' + mask(source))
+            continue
+        if not re.fullmatch(r'(?:[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)', quantities[0]):
+            issues.append('수량 표기 오류: ' + mask(source))
             continue
         code, qty = codes[0], int(quantities[0].replace(',', ''))
         if code not in CATALOG or qty <= 0 or qty > 100000:
