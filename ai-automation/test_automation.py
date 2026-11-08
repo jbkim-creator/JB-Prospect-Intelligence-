@@ -15,7 +15,7 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(r['status'], 'REVIEW_REQUIRED')
 
     def test_missing_and_ambiguous(self):
-        for body in ['DEMO-T01 10개 인쇄: 없음', 'DEMO-T01 100개 300개 인쇄: 없음', '텀블러 300개', 'DEMO-X99 300개 인쇄: 없음', 'DEMO-T01 300개']:
+        for body in ['DEMO-T01 10개 인쇄: 없음', 'DEMO-T01 100개 300개 인쇄: 없음', '텀블러 300개', 'DEMO-X99 300개 인쇄: 없음', 'DEMO-T01 300개', 'DEMO-T01 -300개 인쇄: 없음', 'DEMO-T01 3,00개 인쇄: 없음']:
             with self.subTest(body=body):
                 r = build(self.raw(body))
                 self.assertEqual(r['status'], 'BLOCKED')
