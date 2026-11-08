@@ -1,0 +1,10 @@
+{
+  "id": "SYNTHETIC-CUSTOMER-EXAMPLE-v1",
+  "synthetic": true,
+  "currency": "KRW",
+  "vat_mode": "exclusive",
+  "products": {
+    "CUP-001": {"name": "샘플 스텐컵", "tiers": [[100, 4000], [300, 3700]], "print_each": 200, "setup": 20000},
+    "BAG-001": {"name": "샘플 에코백", "tiers": [[100, 2500], [500, 2200]], "print_each": 300, "setup": 15000}
+  }
+}
