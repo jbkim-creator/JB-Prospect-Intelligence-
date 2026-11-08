@@ -2,3 +2,8 @@ outputs/
 __pycache__/
 .env
 *.local.eml
+gmail_draft_audit.json
+사업검증_보고서.md
+영업이메일_5곳.md
+발송결과_*.md
+영업진행_*.md
