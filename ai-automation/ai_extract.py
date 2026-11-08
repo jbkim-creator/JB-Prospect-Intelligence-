@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from automation import build, export
-from catalog import load_catalog
+from catalog import load_catalog, strict_json_loads
 
 SCHEMA = {
     'type': 'object', 'additionalProperties': False,
@@ -70,13 +70,20 @@ def extract_live(body, catalog, model, *, allow_external=False, synthetic_input=
              for content in item.get('content', []) if content.get('type') == 'output_text']
     if len(texts) != 1:
         raise ValueError('AI 응답이 거절되었거나 구조가 예상과 다릅니다.')
-    return json.loads(texts[0])
+    return strict_json_loads(texts[0])
 
 
 def quote_from_extraction(body, extracted, catalog):
-    if set(extracted) != {'items', 'requested_delivery', 'unresolved'} or not isinstance(extracted['items'], list) or not isinstance(extracted['unresolved'], list):
+    if not isinstance(extracted, dict) or set(extracted) != {'items', 'requested_delivery', 'unresolved'} or not isinstance(extracted['items'], list) or not isinstance(extracted['unresolved'], list):
         raise ValueError('추출 JSON의 구조가 올바르지 않습니다.')
+    if not all(isinstance(x, str) for x in extracted['unresolved']) or len(extracted['items']) > 100:
+        raise ValueError('미해결 조건의 자료형 또는 품목 개수가 올바르지 않습니다.')
     normalized, issues = [], []
+    source_lines = body.splitlines()
+    quantity_pattern = r'(?<![\d.,])([+-]?\d[\d,]*)\s*개'
+    requested_lines = {index for index, line in enumerate(source_lines)
+                       if re.search(quantity_pattern, line) or any(code in line or item['name'] in line for code, item in catalog['products'].items())}
+    covered_lines = set()
     if extracted['unresolved']:
         issues.append('AI가 미해결 조건을 발견했습니다. 원문을 확인하세요.')
     for index, item in enumerate(extracted['items'], 1):
@@ -86,17 +93,36 @@ def quote_from_extraction(body, extracted, catalog):
         code, qty, printing, evidence = (item[k] for k in ('product_code', 'quantity', 'printing', 'evidence'))
         valid = (isinstance(code, str) and code in catalog['products'] and type(qty) is int
                  and 0 < qty <= 100000 and printing in ('없음', '1도')
-                 and item['needs_review'] is False and isinstance(evidence, str) and evidence.strip() and evidence in body)
+                 and item['needs_review'] is False and isinstance(evidence, str) and evidence.strip()
+                 and '\n' not in evidence and '\r' not in evidence and evidence in body)
         if valid:
+            matches = [i for i, line in enumerate(source_lines) if evidence in line]
+            valid = len(matches) == 1 and matches[0] not in covered_lines
+        if valid:
+            source_index = matches[0]
+            source = source_lines[source_index]
             name = catalog['products'][code]['name']
-            valid = (code in evidence or name in evidence) and bool(re.search(r'(?<![\d.,-])' + re.escape(str(qty)) + r'\s*개(?!\d)', evidence))
-            valid = valid and bool(re.search(r'인쇄\s*:?\s*' + re.escape(printing) + r'(?![A-Za-z0-9가-힣])', evidence))
+            code_pattern = r'(?<![A-Za-z0-9_-])' + re.escape(code) + r'(?![A-Za-z0-9_-])'
+            product_matches = [k for k, v in catalog['products'].items()
+                               if re.search(r'(?<![A-Za-z0-9_-])' + re.escape(k) + r'(?![A-Za-z0-9_-])', source) or v['name'] in source]
+            counts = re.findall(quantity_pattern, source)
+            options = re.findall(r'인쇄\s*:?\s*(\S+)', source)
+            options = [re.sub(r'(?:으로|로)$', '', option) for option in options]
+            valid_count = len(counts) == 1 and bool(re.fullmatch(r'(?:[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)', counts[0]))
+            valid = ((bool(re.search(code_pattern, evidence)) or name in evidence)
+                     and product_matches == [code] and valid_count
+                     and int(counts[0].replace(',', '')) == qty and not re.search(r'[-+]\s+\d', source)
+                     and options == [printing])
         if not valid:
             issues.append(f'품목 {index}: 원문 근거·상품·수량·인쇄조건 확인 필요')
             continue
+        covered_lines.add(source_index)
         normalized.append(f'{code} {qty}개 인쇄: {printing}')
+    if requested_lines != covered_lines:
+        issues.append('원문 요청행의 누락·중복·모호함 확인 필요')
     delivery = extracted['requested_delivery']
-    if not isinstance(delivery, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', delivery) or delivery not in body:
+    dates = set(re.findall(r'(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)', body))
+    if not isinstance(delivery, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', delivery) or dates != {delivery}:
         issues.append('납기 원문 확인 필요')
     else:
         normalized.append('납기: ' + delivery)
@@ -128,7 +154,7 @@ if __name__ == '__main__':
         body = Path(args.input).read_text(encoding='utf-8')
         catalog = load_catalog(args.catalog)
         if args.fixture:
-            extracted = json.loads(Path(args.fixture).read_text(encoding='utf-8'))
+            extracted = strict_json_loads(Path(args.fixture).read_text(encoding='utf-8'))
         else:
             extracted = extract_live(body, catalog, args.model, allow_external=args.allow_external, synthetic_input=args.synthetic_input)
         result = quote_from_extraction(body, extracted, catalog)
