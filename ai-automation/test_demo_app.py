@@ -39,5 +39,28 @@ class DesktopTests(unittest.TestCase):
             root.destroy()
 
 
+    def test_error_clears_previous_total_and_catalog_change_requires_review(self):
+        from pathlib import Path
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            app = DemoApp(root)
+            app.analyze()
+            self.assertEqual(app.result['total'], 2068000)
+            app.input.delete('1.0', 'end')
+            app.input.insert('1.0', '가' * 17000)
+            with patch('demo_app.messagebox.showerror'):
+                app.analyze()
+            self.assertIsNone(app.result)
+            self.assertEqual(app.totals.get(), '')
+            self.assertEqual(len(app.table.get_children()), 0)
+            with patch('demo_app.filedialog.askopenfilename', return_value=str(Path(__file__).parent / 'catalog.example.json')):
+                app.select_catalog()
+            self.assertIsNone(app.reviewed_body)
+            self.assertIn('CUP-001', app.catalog_options['catalog'])
+        finally:
+            root.destroy()
+
+
 if __name__ == '__main__':
     unittest.main()
