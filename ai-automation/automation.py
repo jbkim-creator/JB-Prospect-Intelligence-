@@ -75,8 +75,8 @@ def build(raw, catalog=None, catalog_id='SYNTHETIC-DEMO-v1', synthetic=True):
         if not tiers:
             issues.append('최소수량 미달: ' + code)
             continue
-        options = re.findall(r'인쇄\s*:\s*(없음|1도)(?![A-Za-z0-9가-힣])', source)
-        if len(options) != 1:
+        options = re.findall(r'인쇄\s*:\s*(\S+)', source)
+        if len(options) != 1 or options[0] not in ('없음', '1도'):
             issues.append('인쇄 옵션 확인 필요: ' + code)
             continue
         printed = options[0] == '1도'
@@ -128,7 +128,7 @@ def export(result, directory):
         for line in result['items']:
             row = {**result, **line}
             writer.writerow([csv_safe(row.get(k, '')) for k in headers])
-    esc = lambda x: html.escape(str(x))
+    esc = lambda x: html.escape('검토 보류' if x is None else str(x))
     rows = ''.join('<tr>' + ''.join('<td>' + esc(x[k]) + '</td>' for k in ['product', 'quantity', 'unit_price', 'print_each', 'setup', 'net']) + '</tr>' for x in result['items'])
     quote = f'''<!doctype html><html lang="ko"><meta charset="utf-8"><title>JB 견적 검토본</title>
 <style>body{{font:16px system-ui;max-width:1000px;margin:48px auto;color:#183047}}h1{{color:#135d61}}table{{border-collapse:collapse;width:100%}}td,th{{padding:14px;border-bottom:1px solid #ccd8df;text-align:left}}aside{{background:#fff1cf;padding:18px}}small{{color:#536a78}}</style>
