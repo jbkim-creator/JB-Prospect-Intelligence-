@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 from automation import build, run_raw
+from catalog import load_catalog
 
 SAMPLES = {
     '정상 요청': 'DEMO-T01 300개 인쇄: 1도\nDEMO-P01 500개 인쇄: 없음\n납기: 2026-11-30',
@@ -37,6 +38,7 @@ class DemoApp:
         root.minsize(850, 650)
         self.result = None
         self.reviewed_body = None
+        self.catalog_options = {}
         shell = ttk.Frame(root, padding=24)
         shell.pack(fill='both', expand=True)
         ttk.Label(shell, text='메일 문의를 견적 검토본으로', font=('Malgun Gothic', 20, 'bold')).pack(anchor='w')
@@ -49,6 +51,7 @@ class DemoApp:
         self.sample.pack(side='left')
         ttk.Button(toolbar, text='샘플 불러오기', command=self.load_sample).pack(side='left', padx=8)
         ttk.Button(toolbar, text='견적 검토하기', command=self.analyze).pack(side='left')
+        ttk.Button(toolbar, text='단가표 불러오기', command=self.select_catalog).pack(side='left', padx=8)
         ttk.Button(toolbar, text='결과 저장', command=self.save).pack(side='right')
         ttk.Label(shell, text='본문 입력 — 예: DEMO-T01 300개 인쇄: 1도 / 납기: YYYY-MM-DD').pack(anchor='w')
         self.input = tk.Text(shell, height=8, wrap='word', font=('Malgun Gothic', 11), undo=True)
@@ -82,7 +85,7 @@ class DemoApp:
     def analyze(self):
         try:
             body = self.input.get('1.0', 'end-1c').strip()
-            result = build(as_email(body))
+            result = build(as_email(body), **self.catalog_options)
         except (ValueError, UnicodeError) as error:
             self.result = None
             messagebox.showerror('입력 확인', str(error), parent=self.root)
@@ -105,11 +108,29 @@ class DemoApp:
         if not folder:
             return
         try:
-            directory, _ = run_raw(as_email(body), Path(folder))
+            directory, _ = run_raw(as_email(body), Path(folder), **self.catalog_options)
         except (ValueError, OSError) as error:
             messagebox.showerror('저장 확인', str(error), parent=self.root)
             return
         messagebox.showinfo('저장 완료', f'{directory}\n\n견적 HTML · 구조화 JSON · 주문 CSV를 저장했습니다.\n같은 본문은 같은 폴더에 중복 저장하지 않습니다.', parent=self.root)
+
+    def select_catalog(self):
+        path = filedialog.askopenfilename(title='승인된 JSON 단가표 선택', filetypes=[('JSON 단가표', '*.json')], parent=self.root)
+        if not path:
+            return
+        try:
+            data = load_catalog(path)
+        except (ValueError, OSError) as error:
+            messagebox.showerror('단가표 오류', str(error), parent=self.root)
+            return
+        self.catalog_options = {'catalog': data['products'], 'catalog_id': data['id'], 'synthetic': data['synthetic']}
+        self.result = None
+        self.reviewed_body = None
+        self.status.set('단가표 변경: ' + data['id'] + ' · 본문을 다시 검토하세요.')
+        for row in self.table.get_children():
+            self.table.delete(row)
+        self.totals.set('')
+        self.notes.set('상품코드는 불러온 단가표의 코드를 사용하세요. VAT 별도 원화 단가만 지원합니다.')
 
 
 if __name__ == '__main__':
