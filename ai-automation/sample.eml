@@ -1,0 +1,11 @@
+From: demo@example.invalid
+To: pilot@example.invalid
+Subject: Synthetic quote request
+Message-ID: <synthetic-pilot-001@example.invalid>
+Content-Type: text/plain; charset=utf-8
+
+가상 고객 데모입니다.
+DEMO-T01 300개 인쇄: 1도
+DEMO-P01 500개 인쇄: 없음
+납기: 2026-11-30
+재고와 배송비는 담당자가 확인해 주세요.
