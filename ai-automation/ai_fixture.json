@@ -1,0 +1,8 @@
+{
+  "items": [
+    {"product_code": "CUP-001", "quantity": 300, "printing": "1도", "evidence": "샘플 스텐컵 300개 인쇄 1도", "needs_review": false},
+    {"product_code": "BAG-001", "quantity": 500, "printing": "없음", "evidence": "샘플 에코백 500개 인쇄 없음", "needs_review": false}
+  ],
+  "requested_delivery": "2026-11-30",
+  "unresolved": []
+}
