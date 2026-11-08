@@ -4,8 +4,25 @@ import re
 from pathlib import Path
 
 
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('JSON에 중복 항목이 있습니다: ' + key)
+        result[key] = value
+    return result
+
+
+def strict_json_loads(raw):
+    return json.loads(raw, object_pairs_hook=unique_object)
+
+
 def load_catalog(path):
-    data = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    if Path(path).stat().st_size > 2000000:
+        raise ValueError('단가표는 2MB 이하로 제한합니다.')
+    data = strict_json_loads(Path(path).read_text(encoding='utf-8-sig'))
+    if not isinstance(data, dict):
+        raise ValueError('단가표 최상위는 JSON 객체여야 합니다.')
     if data.get('currency') != 'KRW' or data.get('vat_mode') != 'exclusive':
         raise ValueError('현재 단가표는 KRW / VAT 별도만 지원합니다. 포함가를 그대로 넣지 마세요.')
     if not isinstance(data.get('id'), str) or not data['id'].strip() or type(data.get('synthetic')) is not bool:
