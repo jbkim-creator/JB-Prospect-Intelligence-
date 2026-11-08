@@ -1,4 +1,7 @@
 outputs/
+ai-outputs/
+*.private.json
+후속연락_*.md
 __pycache__/
 .env
 *.local.eml
