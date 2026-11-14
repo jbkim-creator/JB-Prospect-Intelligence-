@@ -5,7 +5,7 @@ window.dataLayer=window.dataLayer||[];
 window.jbroTrack=function(name,params){
  const event={event:name,...(params||{}),page_path:location.pathname,utm_source:new URLSearchParams(location.search).get('utm_source')||'',utm_content:new URLSearchParams(location.search).get('utm_content')||''};
  window.dataLayer.push(event);
- if(id && typeof window.gtag==='function') window.gtag('event',name,params||{});
+ if(id && typeof window.gtag==='function') window.gtag('event',name,{...(params||{}),page_path:event.page_path,utm_source:event.utm_source,utm_content:event.utm_content});
 };
 if(id && /^G-[A-Z0-9]+$/.test(id)){
  const s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(id);document.head.appendChild(s);
