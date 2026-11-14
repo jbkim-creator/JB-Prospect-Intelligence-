@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://jbro-business-kits.onrender.com/sitemap.xml
