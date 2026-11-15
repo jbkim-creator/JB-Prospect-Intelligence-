@@ -1,0 +1,23 @@
+name: AI Visibility offline checks
+on:
+  push:
+    branches: [feature/ai-visibility-mvp]
+    paths:
+      - 'ai-visibility/tools/**'
+      - '.github/workflows/ai-visibility-offline.yml'
+  workflow_dispatch:
+
+jobs:
+  offline-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run standard library tests (no API key or network calls)
+        working-directory: ai-visibility
+        run: python3 -m unittest discover -s tools/tests -v
