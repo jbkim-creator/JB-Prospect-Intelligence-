@@ -77,7 +77,7 @@ def main():
     ap.add_argument("--output", default="evidence-openai.json")
     ap.add_argument("--timeout", type=int, default=65)
     args = ap.parse_args()
-    items = [(company, i + 1, prompt) for company, qs in PROMPTS.items() for i, prompt in enumerate(qs)]
+    items = [(company, i + 1, PROMPTS[company][i]) for i in range(3) for company in PROMPTS]
     if args.max_calls < 1 or args.max_calls > 9:
         ap.error("--max-calls must be between 1 and 9")
     items = items[:args.max_calls]
