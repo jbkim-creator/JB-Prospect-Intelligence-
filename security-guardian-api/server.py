@@ -111,4 +111,6 @@ class Handler(BaseHTTPRequestHandler):
             ACTIVE.release()
 
 if __name__=="__main__":
+    import sys, smoke_tests
+    smoke_tests.run(sys.modules[__name__])
     ThreadingHTTPServer(("0.0.0.0",int(os.getenv("PORT","10000"))),Handler).serve_forever()
