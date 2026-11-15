@@ -6,7 +6,7 @@ from urllib.parse import urlsplit, parse_qs
 ORIGIN = "https://jbro-security-guardian.onrender.com"
 RATE = {}
 LOCK = threading.Lock()
-HOST_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
+HOST_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 MAX_HEADER_BYTES=16384
 
 def inspect_host(domain):
@@ -27,15 +27,15 @@ def analyze(domain):
         with context.wrap_socket(raw,server_hostname=domain) as tls:
             cert=tls.getpeercert()
             protocol=tls.version()
-            req=("HEAD / HTTP/1.1\\r\\nHost: "+domain+"\\r\\nUser-Agent: JBRO-Public-Config-Checker/0.1\\r\\nAccept: */*\\r\\nConnection: close\\r\\n\\r\\n").encode("ascii")
+            req=("HEAD / HTTP/1.1\r\nHost: "+domain+"\r\nUser-Agent: JBRO-Public-Config-Checker/0.1\r\nAccept: */*\r\nConnection: close\r\n\r\n").encode("ascii")
             tls.sendall(req)
             data=b""
-            while b"\\r\\n\\r\\n" not in data and len(data)<MAX_HEADER_BYTES:
+            while b"\r\n\r\n" not in data and len(data)<MAX_HEADER_BYTES:
                 part=tls.recv(min(4096,MAX_HEADER_BYTES-len(data)))
                 if not part:break
                 data+=part
-    head=data.split(b"\\r\\n\\r\\n",1)[0].decode("iso-8859-1","replace")
-    lines=head.split("\\r\\n")
+    head=data.split(b"\r\n\r\n",1)[0].decode("iso-8859-1","replace")
+    lines=head.split("\r\n")
     if not lines or not lines[0].startswith("HTTP/"):
         raise ValueError("HTTPS 서버의 응답을 해석할 수 없습니다.")
     headers={}
