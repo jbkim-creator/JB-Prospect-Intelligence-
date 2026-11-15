@@ -6,7 +6,7 @@ const input=document.getElementById('quickcheck-domain');
 const result=document.getElementById('https-results');
 const status=document.getElementById('https-status');
 const reportBtn=document.getElementById('download-report');
-let lastDomain='',lastReport=null;
+let lastDomain='',lastReport=null,dnsDone=false;
 const guidance={
 'HTTPS 인증서':'유효기간이 짧다면 자동 갱신과 인증서 발급 설정을 점검하세요.',
 'HSTS':'HTTPS 전환이 안정적으로 작동하는지 확인한 뒤 HSTS max-age 적용을 검토하세요.',
@@ -18,7 +18,7 @@ function normalize(s){try {const u=new URL(/^https?:\/\//i.test(s)?s:'https://'+
 function makeLine(f){const e=document.createElement('div');e.className='check-row';const h=document.createElement('div');h.className='check-head';const name=document.createElement('strong');name.textContent=f.name;const badge=document.createElement('span');badge.className='check-pill '+(f.status||'unknown');badge.textContent=f.status==='good'?'양호':f.status==='warn'?'개선 권장':'확인 불가';h.append(name,badge);const p=document.createElement('p');p.className='check-desc muted';p.textContent=f.note;const g=document.createElement('p');g.className='fine';g.textContent=guidance[f.name]||'';e.append(h,p,g);return e;}
 form.addEventListener('submit',async event=>{
 event.preventDefault();
-result.replaceChildren();reportBtn.hidden=true;lastReport=null;
+result.replaceChildren();reportBtn.hidden=true;lastReport=null;dnsDone=false;
 const host=normalize(input.value);
 if(!host)return;
 lastDomain=host;
@@ -36,6 +36,15 @@ lastReport=data;
 reportBtn.hidden=false;
 }catch(e){status.textContent=e.name==='AbortError'?'HTTPS 서비스 응답시간을 초과했습니다. 다시 시도해 주세요.':'HTTPS 확인 불가: '+e.message;
 }finally{clearTimeout(timer);}
+});
+document.addEventListener('guardian:dns-done',e=>{
+  if(e.detail.domain!==lastDomain)return;
+  dnsDone=true;
+  reportBtn.hidden=false;
+  const link=document.getElementById('check-consult');
+  const subject='JBRO Security Audit 상담 요청 - '+lastDomain;
+  const body='안녕하세요.\n\n무료 공개 설정 점검 후 상세 진단을 문의드립니다.\n도메인: '+lastDomain+'\nDNS 결과: 양호 '+e.detail.good+'건, 개선 권장 '+e.detail.warn+'건, 확인 불가 '+e.detail.unknown+'건\n\n회사명:\n담당자명:\n연락처:\n\n※ 로그인정보, 고객 개인정보, 비밀번호, API 키는 보내지 않습니다.';
+  link.href='mailto:jbkim@jbrocap.com?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
 });
 reportBtn.addEventListener('click',()=>{
 const dns=document.getElementById('quickcheck-results').innerText;
