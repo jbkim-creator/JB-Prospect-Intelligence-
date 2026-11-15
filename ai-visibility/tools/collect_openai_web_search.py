@@ -53,6 +53,7 @@ def fetch(key, model, prompt, timeout):
         "model": model,
         "tools": [{"type": "web_search"}],
         "tool_choice": "required",
+        "reasoning": {"effort": "low"},
         "input": [
             {"role": "system", "content": "Answer the procurement or discovery question neutrally. Do not preferentially mention any named target company. Use web search and cite verifiable sources."},
             {"role": "user", "content": prompt}
@@ -71,12 +72,25 @@ def fetch(key, model, prompt, timeout):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--model", default="gpt-5.4")
+    ap.add_argument("--self-test", action="store_true", help="Run local parsing test; never makes an API request")
     ap.add_argument("--max-calls", type=int, default=3)
     ap.add_argument("--execute", action="store_true", help="Issue requests that may be billed")
     ap.add_argument("--confirm-paid-calls", default="", help="Must equal YES")
     ap.add_argument("--output", default="evidence-openai.json")
     ap.add_argument("--timeout", type=int, default=65)
     args = ap.parse_args()
+    if args.self_test:
+        fixture = {"output": [
+            {"type": "web_search_call", "id": "call_test", "status": "completed"},
+            {"type": "message", "content": [{"type": "output_text", "text": "Example response.",
+              "annotations": [{"type": "url_citation", "url": "https://example.org/source"}]}]}
+        ]}
+        answer, urls = extract_response(fixture)
+        assert answer == "Example response."
+        assert urls == ["https://example.org/source"]
+        assert any(x.get("type") == "web_search_call" for x in fixture["output"])
+        print("PASS: local response parsing test (synthetic fixture, no paid call)")
+        return 0
     items = [(company, i + 1, PROMPTS[company][i]) for i in range(3) for company in PROMPTS]
     if args.max_calls < 1 or args.max_calls > 9:
         ap.error("--max-calls must be between 1 and 9")
@@ -98,6 +112,10 @@ def main():
     for company, index, prompt in items:
         try:
             result = fetch(key, args.model, prompt, args.timeout)
+            search_calls = [item for item in result.get("output", []) if item.get("type") == "web_search_call"]
+            if not search_calls:
+                error = f"No verified web_search_call in response for {company} Q{index}. Stopped."
+                break
             answer, citation_urls = extract_response(result)
             if not answer:
                 error = f"Empty answer for {company} Q{index}. Stopped."
@@ -116,7 +134,9 @@ def main():
                 "collection_method": "api_auto_capture",
                 "capture_origin": "api_auto_capture",
                 "question_id": f"Q{index:02d}",
-                "usage": result.get("usage", {})
+                "usage": result.get("usage", {}),
+                "observed_web_search_calls": len(search_calls),
+                "web_search_statuses": [item.get("status", "unknown") for item in search_calls]
             })
             print(f"Saved in memory: {company} Q{index} ({len(answer)} chars, {len(citation_urls)} citations)")
         except urllib.error.HTTPError as ex:
