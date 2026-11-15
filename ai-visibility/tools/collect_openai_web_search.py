@@ -113,7 +113,7 @@ def main():
                 "citation_urls": citation_urls,
                 "proof_ref": "Provider response id: " + result.get("id", "unavailable"),
                 "captured_at": when,
-                "collection_method": "manual_direct_capture",
+                "collection_method": "api_auto_capture",
                 "capture_origin": "api_auto_capture",
                 "question_id": f"Q{index:02d}",
                 "usage": result.get("usage", {})
@@ -126,8 +126,7 @@ def main():
             error = f"{type(ex).__name__} at {company} Q{index}; stopped without retry"
             break
     if records:
-        # Existing report builder requires this v1 schema and capture method tag.
-        # API origin remains explicit and visible; no human recommendation judgment is invented.
+        # Output uses the shared evidence schema but marks automated API capture explicitly.
         out = {"schema": "jbro-ai-visibility-evidence-v1",
                "source": "OpenAI Responses API with web_search (not ChatGPT UI)",
                "exported_at": dt.datetime.now(dt.timezone.utc).isoformat(),
