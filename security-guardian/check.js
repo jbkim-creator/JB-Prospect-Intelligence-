@@ -85,6 +85,7 @@
     summary.textContent=domain+' 공개 DNS 점검 완료 · '+good+'개 양호 · '+warn+'개 개선 권장 · '+unknown+'개 확인 불가';
     checkedAt.textContent='조회 시각: '+new Date().toLocaleString('ko-KR')+' · 총 '+checked+'개 항목';
     detail.hidden=false;
-    button.disabled=false;button.textContent='무료 DNS 보안 점검';
+    button.disabled=false;button.textContent='무료 보안 점검 시작';
+    document.dispatchEvent(new CustomEvent('guardian:dns-done',{detail:{domain,good,warn,unknown}}));
   });
 })();
