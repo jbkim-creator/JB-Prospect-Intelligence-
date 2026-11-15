@@ -9,11 +9,19 @@ This script collects OpenAI **Responses API with web_search** results. It does *
 - Actual billable calls require both `--execute` and `--confirm-paid-calls YES`.
 - Uses `OPENAI_API_KEY` only from the environment on the operator's secure machine.
 - Never put the key in browser code, GitHub, ChatGPT messages, or a public Render static site.
-- At most 9 calls per script execution; default 3, one question for each pilot company.
+- At most 9 **Responses API requests** per script execution; default 3, one question for each pilot company. A single model response may make multiple web-search tool calls, so this is **not** a cap on search-tool charges.
 - No automatic retries. The script stops on a failed API request.
 - **This is a per-execution request cap, not a true billing budget cap**. Search tools and token usage can vary; set a provider-side monthly project spend limit.
 - Avoid patient records, sensitive supplier information, and other personal or confidential information in prompts.
 - Output JSON contains search answer text and citations; keep it in a private location, not a public repository.
+
+## Offline parser self-test (zero API requests)
+
+```bash
+python3 tools/collect_openai_web_search.py --self-test
+```
+
+Self-test uses **synthetic** content and must never be included as customer evidence. It checks the response-parser logic, not live API compatibility. Confirm model availability, platform billing controls, and terms before live measurement.
 
 ## Dry run
 
@@ -35,7 +43,7 @@ https://developers.openai.com/api/docs/guides/tools-web-search
 ## Evidence workflow
 1. Confirm prompts and company identities with the client. Do **not** include a target brand name in the search prompt.
 2. Run the script with 3 requests (1 question each: Evita Clinic, Curious Korea, HY Corporation).
-3. Check returned answers, citations, question coverage, response IDs and API usage.
+3. Check returned answers, citations, successful `web_search_call` traces, question coverage, response IDs and API usage. The script now discards an answer without a search-call trace.
 4. Visit `/report.html` and import generated JSON, then select each company.
 5. The collector leaves recommendation verdict `unreviewed`; have a human inspect full answer before classifying recommendation/mention vs mere citation.
 6. Save PDFs only after reviewer approval, with API origin and observed date shown explicitly.
