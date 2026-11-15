@@ -20,3 +20,9 @@ ChatGPT/Gemini/Perplexity 노출·언급률, 실제 인용 링크, 경쟁사 노
 30개 구매 질문 설계·합의된 플랫폼에서 답변 원문/모델/날짜/인용 링크 기록·분석·개선 로드맵: **290,000원(VAT 별도)**. 월 모니터링 **490,000원부터**. 수익·랭킹 개선 보장 없음.
 
 **공식 근거:** https://www.hycorpo.com/
+
+## 2026-11-16 AI 보조 웹검색 확인 결과
+- 단종·희소 산업 및 선박 부품 소싱 확인: https://www.hycorpo.com/about-us
+- 부품번호·브랜드·수량 기반 RFQ 경로 확인: https://www.hycorpo.com/contact-us
+- 공인 유통사 관련 공식 고지 확인: https://www.hycorpo.com/
+**중요:** 검색된 공식 웹페이지의 존재만 확인. ChatGPT/Gemini/Perplexity 추천 응답·언급률은 미측정.
