@@ -6,6 +6,7 @@ from urllib.parse import urlsplit, parse_qs
 ORIGIN = "https://jbro-security-guardian.onrender.com"
 RATE = {}
 LOCK = threading.Lock()
+ACTIVE = threading.BoundedSemaphore(8)
 HOST_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 MAX_HEADER_BYTES=16384
 
@@ -16,7 +17,7 @@ def inspect_host(domain):
     ips=list(dict.fromkeys(x[4][0] for x in entries))
     if not ips or len(ips)>20 or not all(ipaddress.ip_address(ip).is_global for ip in ips):
         raise ValueError("공개 인터넷 주소가 아닌 도메인은 점검하지 않습니다.")
-    return ips
+    return sorted(ips,key=lambda value: 0 if ipaddress.ip_address(value).version == 4 else 1)
 
 def analyze(domain):
     ips=inspect_host(domain)
@@ -95,6 +96,8 @@ class Handler(BaseHTTPRequestHandler):
             if len(RATE)>10000:
                 RATE.clear()
         domain=parse_qs(p.query).get("domain",[""])[0].strip().lower()
+        if not ACTIVE.acquire(blocking=False):
+            return self.send_json(503,{"error":"현재 무료 점검 요청이 많습니다. 잠시 후 다시 시도해 주세요."})
         try:
             result=analyze(domain)
             return self.send_json(200,result)
@@ -104,6 +107,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(422,{"error":"HTTPS 연결 또는 인증서 검증에 실패했습니다. 서버 상태·인증서·네트워크 문제일 수 있습니다."})
         except Exception:
             return self.send_json(500,{"error":"일시적 진단 오류가 발생했습니다."})
+        finally:
+            ACTIVE.release()
 
 if __name__=="__main__":
     ThreadingHTTPServer(("0.0.0.0",int(os.getenv("PORT","10000"))),Handler).serve_forever()
