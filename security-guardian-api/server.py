@@ -113,4 +113,13 @@ class Handler(BaseHTTPRequestHandler):
 if __name__=="__main__":
     import sys, smoke_tests
     smoke_tests.run(sys.modules[__name__])
+    # Only probe the JBRO-owned public website; no arbitrary external testing.
+    try:
+        probe = analyze("jbro-security-guardian.onrender.com")
+        print("JBRO OWNED DOMAIN CHECK: PASS; " + str(probe["http_status"]) +
+              "; TLS=" + str(probe["tls_protocol"]) + "; checks=" +
+              str(len(probe["findings"])), flush=True)
+    except Exception as exc:
+        print("JBRO OWNED DOMAIN CHECK: FAIL; " +
+              type(exc).__name__ + ": " + str(exc)[:180], flush=True)
     ThreadingHTTPServer(("0.0.0.0",int(os.getenv("PORT","10000"))),Handler).serve_forever()
