@@ -20,3 +20,9 @@ ChatGPT/Gemini/Perplexity 노출·언급률, 실제 인용 링크, 경쟁사 노
 30개 구매 질문 설계·합의된 플랫폼에서 답변 원문/모델/날짜/인용 링크 기록·분석·개선 로드맵: **290,000원(VAT 별도)**. 월 모니터링 **490,000원부터**. 수익·랭킹 개선 보장 없음.
 
 **공식 근거:** https://www.curiouskorea.com/
+
+## 2026-11-16 AI 보조 웹검색 확인 결과
+- 해외 여행사 대상 B2B DMC 포지셔닝 확인: https://www.curiouskorea.com/partners
+- 관광업 등록·공식 연락처 확인: https://www.curiouskorea.com/contact
+- 개인 여행객 직접 판매하지 않는다는 공식 구분 확인: https://www.curiouskorea.com/about
+**중요:** 검색된 공식 웹페이지의 존재만 확인. ChatGPT/Gemini/Perplexity 추천 응답·언급률은 미측정.
