@@ -26,3 +26,9 @@ ChatGPT/Gemini/Perplexity 노출·언급률, 실제 인용 링크, 경쟁사 노
 - 해외 환자 예약·영어 코디네이터 안내 확인: https://evitaclinic.com/contact/
 - 영문 단일 웹사이트 정책 공지 확인: https://evitaclinic.com/website-language-update/
 **중요:** 검색된 공식 웹페이지의 존재만 확인. ChatGPT/Gemini/Perplexity 추천 응답·언급률은 미측정.
+
+## 2026-11-16 추가 공개 웹검색 관찰 (AI 추천 실측 아님)
+- 일반 구매 의도 질문: `Recommend English-speaking clinics in Seoul for chest and body contouring consultations.`
+- 영문 상담 공식 페이지가 관련 검색에서 확인됨: https://evitaclinic.com/english_interpreter/
+- 비교 사이트: https://gangnam-aesthetic-clinic.com/ , https://www.gangnambodysculpting.com/guide/english-speaking-body-contouring-clinic-seoul
+- 확인 불가: 실제 ChatGPT/Gemini/Perplexity 추천 여부, 추천률, 사용자 유입 및 구매 전환.
