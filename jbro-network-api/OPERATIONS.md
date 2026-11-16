@@ -1,3 +1,15 @@
+# Neon migration verified — 2026-11-16
+
+- Neon project: `jbro-os-network` (`misty-glitter-91914189`), database `jbro_os`, Singapore, PostgreSQL 17.
+- Tables `partner_applications`, `activity_events` and the application index created. SQL query confirmed 0 applications immediately after creation.
+- Render service `jbro-network-api` (`srv-dbt8fh6k1f9s73b5a9q0`) has secret `DATABASE_URL` set through Render environment variables. Credential is not in GitHub.
+- Render deploy `dep-dbt8vflg1s2s7394euog` is `live` and startup logs include `JBRO_NEON_DB_STARTUP_READY`, confirming an actual successful database connection from the deployed API.
+- **Not yet independently verified:** external public form submission, admin approval flow, backups, and automated Gmail sync.
+- Original Render database `dpg-dbt8eu67bikc73dc0neg-a` is preserved until no data must be migrated and it is safe to retire. Its trial expires 2026-12-16.
+- Neon Free uses auto-suspend after the plan's idle timeout (project setting 0 means default). Stay inside quota and plan secure backups.
+
+---
+
 # JBRO Network API — Render operating procedure
 
 Service: `jbro-network-api` (Singapore, free web service)
