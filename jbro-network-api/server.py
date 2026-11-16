@@ -160,5 +160,12 @@ def update_application(application_id):
     except Exception:
         return jsonify(error="temporarily_unavailable"),503
 
+# Check real database connectivity once per worker startup. No secrets or records in logs.
+try:
+    setup_db()
+    app.logger.info("JBRO_NEON_DB_STARTUP_READY")
+except Exception:
+    app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
+
 if __name__=="__main__":
     app.run(host="0.0.0.0",port=int(os.getenv("PORT",10000)))
