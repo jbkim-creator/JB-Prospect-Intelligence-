@@ -39,6 +39,7 @@ def ensure_schema():
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             CONSTRAINT distinct_trade_parties CHECK(buyer_application_id<>seller_application_id)
         )""")
+        conn.execute("ALTER TABLE deal_rooms ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'KRW' CHECK(currency IN ('KRW','USD'))")
         conn.execute("""CREATE TABLE IF NOT EXISTS deal_sale_contracts (
             id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             room_id BIGINT NOT NULL REFERENCES deal_rooms(id),
@@ -86,9 +87,13 @@ def check_terms(obj):
         v=obj.get(key,"")
         if not isinstance(v,str) or not minimum<=len(v.strip())<=maximum:return None
         clean[key]=v.strip()
-    price=obj.get("total_contract_value_won")
+    currency=obj.get("currency","KRW")
+    if currency not in ("KRW","USD"):return None
+    price=obj.get("total_contract_value_minor") if currency=="USD" else obj.get("total_contract_value_won")
     if type(price) is not int or not 0<price<=MAX_WON:return None
-    clean["total_contract_value_won"]=price
+    clean["currency"]=currency
+    clean["total_contract_value_minor"]=price
+    if currency=="KRW":clean["total_contract_value_won"]=price
     # Party IDs and roles are fixed by the administrator, never provided by a partner.
     return clean
 
@@ -100,7 +105,7 @@ def current_contract(conn,room_id):
 def enriched(conn,room,partner_id=None):
     c=current_contract(conn,room["id"])
     result={"id":room["id"],"title":room["title"],"status":room["status"],
-            "reward_deal_id":room["reward_deal_id"],
+            "reward_deal_id":room["reward_deal_id"],"currency":room["currency"],
             "buyer_application_id":room["buyer_application_id"],
             "seller_application_id":room["seller_application_id"]}
     if partner_id is not None:
@@ -138,12 +143,12 @@ def admin_rooms():
                 partners=cur.execute("SELECT id FROM partner_applications WHERE id IN (%s,%s) AND status='approved'",(buyer,seller)).fetchall()
                 if len(partners)!=2:return error("both_counterparties_must_be_approved",409)
                 if reward_id is not None:
-                    reward=cur.execute("SELECT deal_value_won,status FROM reward_deals WHERE id=%s FOR UPDATE",(reward_id,)).fetchone()
+                    reward=cur.execute("SELECT deal_value_won,currency,status FROM reward_deals WHERE id=%s FOR UPDATE",(reward_id,)).fetchone()
                     if not reward or reward["status"]!='draft':return error("reward_deal_not_draft",409)
-                    if reward["deal_value_won"]!=terms["total_contract_value_won"]:
+                    if reward["currency"]!=terms["currency"] or reward["deal_value_won"]!=terms["total_contract_value_minor"]:
                         return error("reward_deal_value_mismatch",409)
-                cur.execute("""INSERT INTO deal_rooms(buyer_application_id,seller_application_id,reward_deal_id,title)
-                      VALUES(%s,%s,%s,%s) RETURNING id""",(buyer,seller,reward_id,title.strip()))
+                cur.execute("""INSERT INTO deal_rooms(buyer_application_id,seller_application_id,reward_deal_id,title,currency)
+                      VALUES(%s,%s,%s,%s,%s) RETURNING id""",(buyer,seller,reward_id,title.strip(),terms["currency"]))
                 room_id=cur.fetchone()["id"]
                 content=canonical({"document_type":"B2B SALE AND PURCHASE TERMS — PILOT",
                      "version":1,"deal_room_id":room_id,"buyer_application_id":buyer,
