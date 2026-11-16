@@ -468,14 +468,17 @@ def partner_smoke_test():
 # Bind TradeQuest APIs to existing explicit admin / partner authorization.
 import tradequest
 import rewards
+import contracts
 tradequest.init(app, connection, authorized_admin, authorized_partner_id)
 rewards.init(app, connection, authorized_admin, authorized_partner_id)
+contracts.init(app, connection, authorized_admin, authorized_partner_id)
 
 # Check real database connectivity once per worker startup. No secrets or records in logs.
 try:
     setup_db()
     tradequest.ensure_schema()
     rewards.ensure_schema()
+    contracts.ensure_schema()
     app.logger.info("JBRO_NEON_DB_STARTUP_READY")
     if os.getenv("JBRO_SMOKE_TEST") == "1":
         smoke_test()
