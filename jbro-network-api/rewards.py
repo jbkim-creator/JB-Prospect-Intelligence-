@@ -73,7 +73,10 @@ def valid_won(v):
     return type(v) is int and 0<v<=MAX_WON
 
 def details(conn, deal_id):
-    deal=conn.execute("SELECT id,title,deal_value_won,fee_bps,reward_share_pct,status,signed_reference FROM reward_deals WHERE id=%s",(deal_id,)).fetchone()
+    deal=conn.execute("""SELECT d.id,d.title,d.deal_value_won,d.fee_bps,d.reward_share_pct,d.status,d.signed_reference,
+          coalesce(p.discount_won,0)::bigint AS coupon_discount_won,
+          p.application_id AS coupon_holder_id
+          FROM reward_deals d LEFT JOIN promo_fee_coupons p ON p.reward_deal_id=d.id WHERE d.id=%s""",(deal_id,)).fetchone()
     if not deal:return None
     contributors=conn.execute("""SELECT c.id,c.application_id,c.role,c.allocation_pct,c.agreement_reference,
       a.organization,s.approved_won,s.status AS settlement_status,s.payout_reference
@@ -81,9 +84,10 @@ def details(conn, deal_id):
       LEFT JOIN reward_settlements s ON s.contributor_id=c.id
       WHERE c.deal_id=%s ORDER BY c.id""",(deal_id,)).fetchall()
     receipt=conn.execute("SELECT coalesce(sum(amount_won),0)::bigint AS received FROM reward_receipts WHERE deal_id=%s",(deal_id,)).fetchone()["received"]
-    fee_ceiling=deal["deal_value_won"]*deal["fee_bps"]//10000
+    gross_fee=deal["deal_value_won"]*deal["fee_bps"]//10000
+    fee_ceiling=max(0,gross_fee-deal["coupon_discount_won"])
     pool=receipt*deal["reward_share_pct"]//100
-    return dict(deal,contributors=contributors,commission_ceiling_won=fee_ceiling,commission_received_won=receipt,
+    return dict(deal,contributors=contributors,gross_commission_won=gross_fee,commission_ceiling_won=fee_ceiling,commission_received_won=receipt,
                 reward_pool_won=pool,jbro_retained_before_costs_won=receipt-pool,
                 allocation_total_pct=sum(c["allocation_pct"] for c in contributors))
 
@@ -157,12 +161,16 @@ def record_receipt(deal_id):
     try:
         with DB() as conn:
             with conn.cursor() as cur:
-                deal=cur.execute("SELECT deal_value_won,fee_bps,status FROM reward_deals WHERE id=%s FOR UPDATE",(deal_id,)).fetchone()
+                deal=cur.execute("""SELECT d.deal_value_won,d.fee_bps,d.status,coalesce(p.discount_won,0)::bigint AS coupon_discount_won
+                  FROM reward_deals d LEFT JOIN promo_fee_coupons p ON p.reward_deal_id=d.id
+                  WHERE d.id=%s FOR UPDATE OF d""",(deal_id,)).fetchone()
                 if not deal:return err("not_found",404)
                 if deal["status"]!="signed":return err("signed_agreement_required",409)
                 if cur.execute("SELECT 1 FROM reward_settlements s JOIN reward_contributors c ON c.id=s.contributor_id WHERE c.deal_id=%s LIMIT 1",(deal_id,)).fetchone():return err("settlement_locked_after_approval",409)
                 current=cur.execute("SELECT coalesce(sum(amount_won),0)::bigint AS total FROM reward_receipts WHERE deal_id=%s",(deal_id,)).fetchone()["total"]
-                if current+amount>deal["deal_value_won"]*deal["fee_bps"]//10000:return err("fee_receipts_exceed_ceiling",409)
+                effective_fee=max(0,deal["deal_value_won"]*deal["fee_bps"]//10000-deal["coupon_discount_won"])
+                if effective_fee==0:return err("commission_waived_by_first_trade_coupon",409)
+                if current+amount>effective_fee:return err("fee_receipts_exceed_ceiling",409)
                 row=cur.execute("""INSERT INTO reward_receipts(deal_id,amount_won,bank_reference)
                     VALUES (%s,%s,%s) ON CONFLICT(deal_id,bank_reference) DO NOTHING RETURNING id""",
                     (deal_id,amount,reference.strip())).fetchone()
