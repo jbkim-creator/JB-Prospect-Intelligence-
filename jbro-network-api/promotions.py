@@ -46,7 +46,7 @@ def net_fee(value,discount_won):
 def public_coupon():
     return jsonify(code=CODE,currency="USD",first_deal_value_waived_usd_cents=CAP_VALUE_USD_CENTS,
         jbro_fee_bps=FEE_BPS,max_discount_usd_cents=MAX_DISCOUNT_USD_CENTS,
-        note="Pilot offer subject to eligibility and written JBRO approval. Only the agreed 2.5% JBRO fee stream for one first eligible buyer or seller transaction. No other-side fee relief. Not retroactive or stackable."),200
+        note="FIRST10K: 0% platform trading fee on the first USD 10,000 of one qualifying transaction for one approved first-time fee-paying buyer OR seller, maximum saving USD 250. Subject to approval and written fee agreement naming the charging legal entity. No other-side or third-party fee relief. Not retroactive or stackable."),200
 
 @bp.post("/api/admin/rewards/<int:deal_id>/first-trade-coupon")
 def assign_coupon(deal_id):
