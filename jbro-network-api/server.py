@@ -160,10 +160,60 @@ def update_application(application_id):
     except Exception:
         return jsonify(error="temporarily_unavailable"),503
 
+
+def smoke_test():
+    """Exercise real HTTP intake, admin listing and review with scoped test-record cleanup."""
+    if not (DB_URL and ADMIN_TOKEN and len(ADMIN_TOKEN) >= 32):
+        raise RuntimeError("Smoke test requires database and admin token")
+    import uuid
+    nonce=uuid.uuid4().hex[:14]
+    test_mail="jbro-smoke-"+nonce+"@example.invalid"
+    test_org="JBRO_SMOKE_TEST_"+nonce
+    test_id=None
+    client=app.test_client()
+    auth={"Authorization": "Bearer "+ADMIN_TOKEN}
+    try:
+        res=client.post("/api/partner-applications",json={
+            "organization":test_org,"email":test_mail,"country":"Test",
+            "role":"Service partner","summary":"Synthetic testing only; no real person or company data.",
+            "consent":True
+        },headers={"Origin":ALLOWED_ORIGIN})
+        if res.status_code!=201:
+            raise RuntimeError("Partner intake did not return 201; status="+str(res.status_code))
+        reference=res.get_json()["reference"]
+        test_id=int(reference.rsplit("-",1)[1])
+        listing=client.get("/api/admin/applications",headers=auth)
+        if listing.status_code!=200:
+            raise RuntimeError("Admin list did not return 200")
+        if not any(item["id"]==test_id for item in listing.get_json()["applications"]):
+            raise RuntimeError("Test application missing from admin listing")
+        review=client.patch("/api/admin/applications/"+str(test_id),
+                json={"status":"reviewing"},headers=auth)
+        if review.status_code!=200:
+            raise RuntimeError("Review state update did not return 200")
+        with connection() as conn:
+            row=conn.execute("SELECT status FROM partner_applications WHERE id=%s AND organization=%s AND email=%s",(test_id,test_org,test_mail)).fetchone()
+        if not row or row["status"]!="reviewing":
+            raise RuntimeError("Review status was not persisted")
+        deny=client.get("/api/admin/applications")
+        if deny.status_code!=401:
+            raise RuntimeError("Unauthenticated access did not return 401")
+        app.logger.info("JBRO_INTAKE_SMOKE_PASS")
+    finally:
+        if test_id is not None:
+            with connection() as conn:
+                # Only delete the synthetic record we just created, never any real applications.
+                row=conn.execute("SELECT id FROM partner_applications WHERE id=%s AND organization=%s AND email=%s",(test_id,test_org,test_mail)).fetchone()
+                if row:
+                    conn.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(test_id,))
+                    conn.execute("DELETE FROM partner_applications WHERE id=%s AND organization=%s AND email=%s",(test_id,test_org,test_mail))
+
 # Check real database connectivity once per worker startup. No secrets or records in logs.
 try:
     setup_db()
     app.logger.info("JBRO_NEON_DB_STARTUP_READY")
+    if os.getenv("JBRO_SMOKE_TEST") == "1":
+        smoke_test()
 except Exception:
     app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
 
