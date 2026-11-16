@@ -173,6 +173,87 @@ def authorized_admin():
     v=request.headers.get("Authorization","")
     return v.startswith("Bearer ") and hmac.compare_digest(v[7:],ADMIN_TOKEN)
 
+@app.get("/api/admin/gmv-kpis")
+def private_gmv_kpis():
+    """Read-only, admin-only trading KPIs. Never treat a quote or signed deal as completed GMV."""
+    if not authorized_admin():
+        return jsonify(error="unauthorized"),401
+    try:
+        with connection() as conn:
+            rows=conn.execute("""
+              WITH latest_stage AS (
+                SELECT DISTINCT ON (room_id,stage) room_id,stage,status
+                FROM deal_execution_events
+                ORDER BY room_id,stage,created_at DESC,id DESC
+              ), stages AS (
+                SELECT room_id,
+                  bool_and(status='verified') AND count(*)=4 AS all_verified
+                FROM latest_stage
+                GROUP BY room_id
+              ), sale AS (
+                SELECT r.id AS reward_deal_id,r.currency,r.deal_value_won AS value_minor,
+                       dr.id AS room_id,
+                       EXISTS (
+                         SELECT 1 FROM deal_sale_contracts c
+                         WHERE c.room_id=dr.id AND c.status='signed'
+                       ) AS signed_contract,
+                       COALESCE(st.all_verified,FALSE) AS fulfilled
+                FROM reward_deals r
+                JOIN deal_rooms dr ON dr.reward_deal_id=r.id
+                LEFT JOIN stages st ON st.room_id=dr.id
+              ), receipt AS (
+                SELECT r.currency,COALESCE(sum(p.amount_won),0)::bigint AS receipts_minor,
+                       count(p.id)::integer AS receipt_entries
+                FROM reward_deals r
+                JOIN reward_receipts p ON p.deal_id=r.id
+                GROUP BY r.currency
+              )
+              SELECT s.currency,
+                count(*) FILTER (WHERE s.signed_contract)::integer AS signed_deals,
+                COALESCE(sum(s.value_minor) FILTER (WHERE s.signed_contract),0)::bigint AS signed_gmv_minor,
+                count(*) FILTER (WHERE s.signed_contract AND s.fulfilled)::integer AS completed_deals,
+                COALESCE(sum(s.value_minor) FILTER (WHERE s.signed_contract AND s.fulfilled),0)::bigint AS completed_gmv_minor,
+                COALESCE(max(rc.receipts_minor),0)::bigint AS recorded_commission_minor,
+                COALESCE(max(rc.receipt_entries),0)::integer AS receipt_entries
+              FROM sale s LEFT JOIN receipt rc ON rc.currency=s.currency
+              GROUP BY s.currency
+            """).fetchall()
+            # Receipts without linked sale rooms must still show as recorded fees, not GMV.
+            receipt_rows=conn.execute("""
+              SELECT r.currency,COALESCE(sum(p.amount_won),0)::bigint AS amount,
+                     count(p.id)::integer AS entries
+              FROM reward_receipts p JOIN reward_deals r ON r.id=p.deal_id
+              GROUP BY r.currency
+            """).fetchall()
+            counts=conn.execute("""
+              SELECT
+                (SELECT count(*) FROM partner_applications WHERE status='approved') AS approved_partners,
+                (SELECT count(*) FROM partner_opportunities WHERE status='qualified') AS qualified_opportunities,
+                (SELECT count(*) FROM deal_rooms WHERE status='draft') AS draft_rooms,
+                (SELECT count(*) FROM promo_fee_coupons WHERE campaign='FIRST10K') AS first10k_coupons
+            """).fetchone()
+        currencies={c:{"signed_deals":0,"signed_gmv_minor":0,"completed_deals":0,"completed_gmv_minor":0,"recorded_commission_minor":0,"receipt_entries":0} for c in ("USD","KRW")}
+        for r in rows:
+            c=r["currency"]
+            if c not in currencies: continue
+            for k in currencies[c]: currencies[c][k]=int(r[k])
+        for r in receipt_rows:
+            if r["currency"] in currencies:
+                currencies[r["currency"]]["recorded_commission_minor"]=int(r["amount"])
+                currencies[r["currency"]]["receipt_entries"]=int(r["entries"])
+        return jsonify(
+            currencies=currencies,counts={k:int(v) for k,v in counts.items()},
+            definitions={
+              "signed_gmv":"Sum of deal value for reward deals linked to a room with a signed sale contract. Not a completed sale.",
+              "completed_gmv":"Signed sale contract plus latest verified evidence in all four stages: inspection, shipment, delivery, payment. Administrative verification, not independent bank audit.",
+              "recorded_commission":"Sum of recorded commission receipt entries, not independently reconciled to bank statements.",
+              "currency":"USD minor units are cents; KRW minor units are won. Never add different currencies.",
+              "period":"Lifetime since database creation; no monthly attribution or imported historic Gmail deals."
+            })
+    except Exception:
+        app.logger.exception("Private KPI read failed")
+        return jsonify(error="temporarily_unavailable"),503
+
 @app.get("/api/admin/applications")
 def list_applications():
     if not authorized_admin():
