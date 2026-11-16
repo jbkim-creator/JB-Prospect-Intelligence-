@@ -113,8 +113,8 @@ def main():
         try:
             result = fetch(key, args.model, prompt, args.timeout)
             search_calls = [item for item in result.get("output", []) if item.get("type") == "web_search_call"]
-            if not search_calls:
-                error = f"No verified web_search_call in response for {company} Q{index}. Stopped."
+            if not search_calls or not any(call.get("status") == "completed" for call in search_calls):
+                error = f"No completed web_search_call in response for {company} Q{index}. Stopped."
                 break
             answer, citation_urls = extract_response(result)
             if not answer:
