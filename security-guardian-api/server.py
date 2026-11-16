@@ -53,7 +53,9 @@ def analyze(domain):
     finding("HTTPS 인증서","good" if days is not None and days>14 else "warn" if days is not None else "unknown",
         ("유효기간 약 "+str(days)+"일 남음" if days is not None else "인증서 유효기간 확인 불가"))
     hsts=headers.get("strict-transport-security","")
-    finding("HSTS","good" if "max-age=" in hsts.lower() else "warn","HTTPS 강제 설정 헤더가 "+("확인됩니다." if "max-age=" in hsts.lower() else "확인되지 않습니다."))
+    hsts_age_match=re.search(r"(?:^|;)\\s*max-age\\s*=\\s*(\\d+)",hsts,re.I)
+    hsts_age=int(hsts_age_match.group(1)) if hsts_age_match else 0
+    finding("HSTS","good" if hsts_age>0 else "warn","HTTPS 강제 설정(HSTS)이 "+("확인됩니다. 기간 및 서브도메인 적용은 별도 검토가 필요합니다." if hsts_age>0 else "없거나 max-age=0으로 비활성화되어 있습니다."))
     csp=headers.get("content-security-policy","")
     finding("CSP","good" if csp else "warn","콘텐츠 보안 정책이 "+("존재합니다. 정책의 적절성은 별도 검토가 필요합니다." if csp else "확인되지 않습니다."))
     nosniff=headers.get("x-content-type-options","")
