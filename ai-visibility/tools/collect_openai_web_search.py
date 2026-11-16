@@ -53,6 +53,7 @@ def fetch(key, model, prompt, timeout):
         "model": model,
         "tools": [{"type": "web_search"}],
         "tool_choice": "required",
+        "max_tool_calls": 2,
         "reasoning": {"effort": "low"},
         "input": [
             {"role": "system", "content": "Answer the procurement or discovery question neutrally. Do not preferentially mention any named target company. Use web search and cite verifiable sources."},
