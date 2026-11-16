@@ -5,6 +5,7 @@ ONE linked draft Deal Room + Reward Deal; unique per application. No retroactivi
 No effect on third-party contracts or fees on the other side of a deal.
 """
 import logging
+import json
 from flask import Blueprint, request, jsonify
 
 bp=Blueprint("promotions",__name__)
