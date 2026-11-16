@@ -134,6 +134,8 @@ $('quest-create').addEventListener('submit',async e=>{
  catch(err){$('quest-admin-message').textContent='Create failed: '+err.message}
  finally{b.disabled=false}
 });
+function displayMoney(minor,currency){const value=currency==='USD'?Number(minor)/100:Number(minor);return new Intl.NumberFormat('en-US',{style:'currency',currency:currency==='USD'?'USD':'KRW',minimumFractionDigits:currency==='USD'?2:0,maximumFractionDigits:currency==='USD'?2:0}).format(value)}
+function parseMinor(raw,currency){const value=Number(raw);const amount=Math.round(value*(currency==='USD'?100:1));if(!Number.isFinite(value)||value<=0||!Number.isSafeInteger(amount)||(currency==='KRW'&&!Number.isInteger(value)))throw Error('Invalid amount for selected currency');return amount}
 function renderRewards(deals){
  const root=$('reward-deals');root.replaceChildren();
  const text=$('reward-message');
@@ -141,16 +143,16 @@ function renderRewards(deals){
  for(const d of deals){
   const card=make('article','application');
   card.append(make('div','id','Deal '+d.id+' · '+d.status),make('h2','',d.title));
-  card.append(make('div','details','Contract value '+Number(d.deal_value_won).toLocaleString('ko-KR')+' KRW · Commission '+d.fee_bps/100+'% · Reward share '+d.reward_share_pct+'%'));
-  card.append(make('p','', 'Received: '+Number(d.commission_received_won).toLocaleString('ko-KR')+' KRW · Reward pool: '+Number(d.reward_pool_won).toLocaleString('ko-KR')+' KRW · Allocated: '+d.allocation_total_pct+'%'));
-  card.append(make('p','', 'FIRST10M discount: '+Number(d.coupon_discount_won||0).toLocaleString('ko-KR')+' KRW · Net fee ceiling: '+Number(d.commission_ceiling_won).toLocaleString('ko-KR')+' KRW'));
-  for(const c of d.contributors)card.append(make('div','details',c.organization+' / '+c.role+' / '+c.allocation_pct+'% / '+(c.settlement_status||'not approved')+' / '+(c.approved_won===null?'—':Number(c.approved_won).toLocaleString('ko-KR')+' KRW')));
+  card.append(make('div','details','Contract value '+displayMoney(d.deal_value_minor,d.currency)+' · Commission '+d.fee_bps/100+'% · Reward share '+d.reward_share_pct+'%'));
+  card.append(make('p','', 'Received: '+displayMoney(d.commission_received_minor,d.currency)+' · Reward pool: '+displayMoney(d.reward_pool_minor,d.currency)+' · Allocated: '+d.allocation_total_pct+'%'));
+  card.append(make('p','', 'FIRST10K USD discount: '+displayMoney(d.coupon_discount_minor||0,d.currency)+' · Net fee ceiling: '+displayMoney(d.commission_ceiling_minor,d.currency)));
+  for(const c of d.contributors)card.append(make('div','details',c.organization+' / '+c.role+' / '+c.allocation_pct+'% / '+(c.settlement_status||'not approved')+' / '+(c.approved_won===null?'—':displayMoney(c.approved_won,d.currency))));
   const control=(label,fields,submit,confirmation)=>{
     const f=make('form','');f.style.marginTop='15px';
     const inputs={};
     for(const field of fields){
       const l=make('label','',field.label);const el=document.createElement('input');
-      el.required=true;el.type=field.type||'text';el.placeholder=field.placeholder||'';if(field.min)el.min=field.min;if(field.max)el.max=field.max;
+      el.required=true;el.type=field.type||'text';el.placeholder=field.placeholder||'';if(field.min)el.min=field.min;if(field.max)el.max=field.max;if(field.step)el.step=field.step;
       l.append(el);f.append(l);inputs[field.key]=el;
     }
     const b=make('button','',label);b.type='submit';f.append(b);
@@ -163,12 +165,12 @@ function renderRewards(deals){
     card.append(f);
   };
   if(d.status==='draft'&&!d.coupon_holder_id){
-    control('Grant first-trade coupon (up to KRW 250,000 fee waiver)',[
+    control('Grant FIRST10K (up to US$250 fee waiver)',[
       {key:'application_id',label:'Approved first-time fee-paying buyer OR seller application ID',type:'number',min:'1'}
     ],v=>api('/api/admin/rewards/'+d.id+'/first-trade-coupon',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({application_id:Number(v.application_id),confirm_eligibility_and_fee_terms:true})
-    }),'Verify this is the partner’s FIRST eligible deal, that they are an approved buyer or seller in the linked DRAFT Deal Room, and that their 2.5% JBRO fee stream is eligible for the one-time FIRST10M waiver. The contract must not already have been issued.');
+    }),'Verify this is the partner’s FIRST eligible deal, that they are an approved buyer or seller in the linked DRAFT Deal Room, and that their 2.5% JBRO fee stream is eligible for the one-time US$10,000 FIRST10K waiver (USD-denominated deals only). The contract must not already have been issued.');
   }
   if(d.status==='draft'){
     control('Add contributor',[
@@ -180,7 +182,7 @@ function renderRewards(deals){
     const guide=make('p','','To sign this reward deal, issue and review participant contracts in the Platform Contract Signing section below. All parties must accept before finalization.');card.append(guide);
   }
   if(d.status==='signed' && !d.contributors.some(c=>c.settlement_status)){
-    control('Record received commission',[{key:'amount_won',label:'Actual JBRO commission received (KRW)',type:'number',min:'1'},{key:'bank_reference',label:'Verifiable bank receipt reference'}],v=>api('/api/admin/rewards/'+d.id+'/receipts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...v,amount_won:Number(v.amount_won),confirm_bank_received:true})}),'Confirm bank statement proves JBRO received this commission?');
+    control('Record received commission',[{key:'amount',label:'Actual JBRO commission received ('+d.currency+')',type:'number',min:d.currency==='USD'?'0.01':'1',step:d.currency==='USD'?'0.01':'1'},{key:'bank_reference',label:'Verifiable bank receipt reference'}],v=>api('/api/admin/rewards/'+d.id+'/receipts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currency:d.currency,...(d.currency==='USD'?{amount_minor:parseMinor(v.amount,'USD')}:{amount_won:parseMinor(v.amount,'KRW')}),bank_reference:v.bank_reference,confirm_bank_received:true})}),'Confirm bank statement proves JBRO received this commission in the stated currency?');
     const approve=make('button','', 'Approve partner ledger amounts (no transfer)');
     approve.type='button';approve.addEventListener('click',async()=>{
       if(!confirm('Confirm all contractual, identity, tax and compliance checks are complete? This approves ledger amounts only.'))return;
@@ -307,14 +309,14 @@ $('sale-create').addEventListener('submit',async e=>{
  e.preventDefault();const form=$('sale-create');if(!form.reportValidity())return;
  const btn=form.querySelector('button[type=submit]');btn.disabled=true;const obj=Object.fromEntries(new FormData(form));
  const terms={};for(const key of ['buyer_legal_name','seller_legal_name','item_description','quantity_unit','delivery_terms','inspection_terms','payment_terms','governing_law','dispute_resolution','additional_terms'])terms[key]=(obj[key]||'').trim();
- terms.total_contract_value_won=Number(obj.total_contract_value_won);
+ terms.currency=obj.currency;const saleMinor=parseMinor(obj.total_contract_value,obj.currency);if(obj.currency==='USD')terms.total_contract_value_minor=saleMinor;else terms.total_contract_value_won=saleMinor;
  const payload={title:obj.title.trim(),buyer_application_id:Number(obj.buyer_application_id),seller_application_id:Number(obj.seller_application_id),reward_deal_id:obj.reward_deal_id?Number(obj.reward_deal_id):null,terms};
  try{const r=await api('/api/admin/deal-rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});$('sale-admin-status').textContent='Private Deal Room '+r.room_id+' created in draft. Issue explicitly after review.';form.reset();await refresh();}
  catch(err){$('sale-admin-status').textContent='Create failed: '+err.message}finally{btn.disabled=false}
 });
 $('reward-create').addEventListener('submit',async e=>{
  e.preventDefault();const b=$('reward-create').querySelector('button[type=submit]');b.disabled=true;
- try{await api('/api/admin/rewards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('reward-title').value.trim(),deal_value_won:Number($('reward-value').value),reward_share_pct:Number($('reward-share').value)})});$('reward-create').reset();$('reward-message').textContent='Draft created; does not establish a contractual obligation.';await refresh();}
+ try{await api('/api/admin/rewards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('reward-title').value.trim(),currency:$('reward-currency').value,...($('reward-currency').value==='USD'?{deal_value_minor:parseMinor($('reward-value').value,'USD')}:{deal_value_won:parseMinor($('reward-value').value,'KRW')}),reward_share_pct:Number($('reward-share').value)})});$('reward-create').reset();$('reward-message').textContent='Draft created; does not establish a contractual obligation.';await refresh();}
  catch(err){$('reward-message').textContent=err.message}finally{b.disabled=false}
 });
 $('login-form').addEventListener('submit',async e=>{
