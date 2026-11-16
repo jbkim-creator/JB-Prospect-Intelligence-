@@ -32,6 +32,7 @@ def ensure_schema():
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           CONSTRAINT signed_reference_required CHECK (status='draft' OR signed_reference IS NOT NULL)
         )""")
+        conn.execute("ALTER TABLE reward_deals ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'KRW' CHECK(currency IN ('KRW','USD'))")
         conn.execute("""CREATE TABLE IF NOT EXISTS reward_contributors (
           id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
           deal_id BIGINT NOT NULL REFERENCES reward_deals(id),
@@ -73,7 +74,7 @@ def valid_won(v):
     return type(v) is int and 0<v<=MAX_WON
 
 def details(conn, deal_id):
-    deal=conn.execute("""SELECT d.id,d.title,d.deal_value_won,d.fee_bps,d.reward_share_pct,d.status,d.signed_reference,
+    deal=conn.execute("""SELECT d.id,d.title,d.deal_value_won,d.currency,d.fee_bps,d.reward_share_pct,d.status,d.signed_reference,
           coalesce(p.discount_won,0)::bigint AS coupon_discount_won,
           p.application_id AS coupon_holder_id
           FROM reward_deals d LEFT JOIN promo_fee_coupons p ON p.reward_deal_id=d.id WHERE d.id=%s""",(deal_id,)).fetchone()
@@ -87,9 +88,17 @@ def details(conn, deal_id):
     gross_fee=deal["deal_value_won"]*deal["fee_bps"]//10000
     fee_ceiling=max(0,gross_fee-deal["coupon_discount_won"])
     pool=receipt*deal["reward_share_pct"]//100
-    return dict(deal,contributors=contributors,gross_commission_won=gross_fee,commission_ceiling_won=fee_ceiling,commission_received_won=receipt,
+    # Legacy *_won keys are retained for backwards-compatible internal storage.
+    # For USD entries, amounts are integer USD cents, never KRW or USD major units.
+    result=dict(deal,contributors=contributors,gross_commission_won=gross_fee,commission_ceiling_won=fee_ceiling,commission_received_won=receipt,
                 reward_pool_won=pool,jbro_retained_before_costs_won=receipt-pool,
                 allocation_total_pct=sum(c["allocation_pct"] for c in contributors))
+    result.update(deal_value_minor=deal["deal_value_won"],gross_commission_minor=gross_fee,
+                  coupon_discount_minor=deal["coupon_discount_won"],commission_ceiling_minor=fee_ceiling,
+                  commission_received_minor=receipt,reward_pool_minor=pool,
+                  jbro_retained_before_costs_minor=receipt-pool,
+                  minor_unit_digits=2 if deal["currency"]=="USD" else 0)
+    return result
 
 @bp.route("/api/admin/rewards",methods=["GET","POST"])
 def admin_rewards():
@@ -103,13 +112,15 @@ def admin_rewards():
             logger.exception("reward list failed");return err("temporarily_unavailable",503)
     body=request.get_json(silent=True)
     if not isinstance(body,dict):return err("invalid_payload")
-    title=body.get("title");value=body.get("deal_value_won");share=body.get("reward_share_pct",30)
-    if not isinstance(title,str) or not 8<=len(title.strip())<=160 or not valid_won(value) or type(share)!=int or not 0<=share<=40:
+    currency=body.get("currency","KRW")
+    title=body.get("title");value=body.get("deal_value_minor") if currency=="USD" else body.get("deal_value_won")
+    share=body.get("reward_share_pct",30)
+    if not isinstance(title,str) or not 8<=len(title.strip())<=160 or currency not in ("KRW","USD") or not valid_won(value) or type(share)!=int or not 0<=share<=40:
         return err("invalid_fields")
     try:
         with DB() as conn:
-            row=conn.execute("""INSERT INTO reward_deals(title,deal_value_won,reward_share_pct)
-                        VALUES (%s,%s,%s) RETURNING id""",(title.strip(),value,share)).fetchone()
+            row=conn.execute("""INSERT INTO reward_deals(title,deal_value_won,currency,reward_share_pct)
+                        VALUES (%s,%s,%s,%s) RETURNING id""",(title.strip(),value,currency,share)).fetchone()
             conn.execute("INSERT INTO reward_audit(deal_id,action) VALUES (%s,'draft_created')",(row["id"],))
         return jsonify(deal_id=row["id"],status="draft"),201
     except Exception:
@@ -153,7 +164,9 @@ def sign_deal(deal_id):
 @bp.post("/api/admin/rewards/<int:deal_id>/receipts")
 def record_receipt(deal_id):
     if not ADMIN():return err("unauthorized",401)
-    body=request.get_json(silent=True);amount=body.get("amount_won") if isinstance(body,dict) else None
+    body=request.get_json(silent=True)
+    request_currency=body.get("currency","KRW") if isinstance(body,dict) else "KRW"
+    amount=body.get("amount_minor") if isinstance(body,dict) and request_currency=="USD" else (body.get("amount_won") if isinstance(body,dict) else None)
     reference=body.get("bank_reference") if isinstance(body,dict) else None
     confirm=body.get("confirm_bank_received") if isinstance(body,dict) else None
     if not valid_won(amount) or not isinstance(reference,str) or not 4<=len(reference.strip())<=160 or confirm is not True:
@@ -161,11 +174,12 @@ def record_receipt(deal_id):
     try:
         with DB() as conn:
             with conn.cursor() as cur:
-                deal=cur.execute("""SELECT d.deal_value_won,d.fee_bps,d.status,coalesce(p.discount_won,0)::bigint AS coupon_discount_won
+                deal=cur.execute("""SELECT d.deal_value_won,d.currency,d.fee_bps,d.status,coalesce(p.discount_won,0)::bigint AS coupon_discount_won
                   FROM reward_deals d LEFT JOIN promo_fee_coupons p ON p.reward_deal_id=d.id
                   WHERE d.id=%s FOR UPDATE OF d""",(deal_id,)).fetchone()
                 if not deal:return err("not_found",404)
                 if deal["status"]!="signed":return err("signed_agreement_required",409)
+                if deal["currency"]!=request_currency:return err("currency_mismatch",409)
                 if cur.execute("SELECT 1 FROM reward_settlements s JOIN reward_contributors c ON c.id=s.contributor_id WHERE c.deal_id=%s LIMIT 1",(deal_id,)).fetchone():return err("settlement_locked_after_approval",409)
                 current=cur.execute("SELECT coalesce(sum(amount_won),0)::bigint AS total FROM reward_receipts WHERE deal_id=%s",(deal_id,)).fetchone()["total"]
                 effective_fee=max(0,deal["deal_value_won"]*deal["fee_bps"]//10000-deal["coupon_discount_won"])
