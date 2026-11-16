@@ -241,3 +241,97 @@ def partner_rewards():
         return jsonify(rewards=rows,note="Only signed agreements appear. XP is not money; no automatic payment."),200
     except Exception:
         logger.exception("partner reward lookup failed");return err("temporarily_unavailable",503)
+
+
+def smoke_test(app, admin_token, origin):
+    """Real Neon DB smoke test: 2.5% calculation, 30% share, signed terms, paid receipts, no transfers."""
+    import secrets
+    nonce=secrets.token_hex(8)
+    client=app.test_client()
+    auth={"Authorization":"Bearer "+admin_token}
+    aids=[];deal_id=None
+    try:
+        for index in (0,1):
+            r=client.post("/api/partner-applications",json={
+                "organization":"JBRO_REWARD_TEST_"+nonce+"_"+str(index),
+                "email":"reward-"+nonce+"-"+str(index)+"@example.invalid",
+                "country":"Test","role":"Service partner",
+                "summary":"Test applicant only, no commercial authorization.",
+                "consent":True
+            },headers={"Origin":origin})
+            assert r.status_code==201,("intake",r.status_code)
+            aid=int(r.get_json()["reference"].split("-")[-1]);aids.append(aid)
+            assert client.patch("/api/admin/applications/"+str(aid),headers=auth,json={"status":"approved"}).status_code==200
+        p=client.post("/api/admin/rewards",headers=auth,json={
+            "title":"JBRO synthetic commercial accounting QA "+nonce,
+            "deal_value_won":100000000,"reward_share_pct":30})
+        assert p.status_code==201,("draft",p.status_code)
+        deal_id=p.get_json()["deal_id"]
+        receipt_path="/api/admin/rewards/"+str(deal_id)+"/receipts"
+        early=client.post(receipt_path,headers=auth,json={"amount_won":2500000,"bank_reference":"QA-BANK-"+nonce,"confirm_bank_received":True})
+        assert early.status_code==409,"receipt allowed without signed terms"
+        for index,percent in enumerate((50,50)):
+            res=client.post("/api/admin/rewards/"+str(deal_id)+"/contributors",headers=auth,json={
+                "application_id":aids[index],
+                "role":"buyer_introduction" if index==0 else "supplier_introduction",
+                "allocation_pct":percent,
+                "agreement_reference":"QA-ROLE-"+nonce+"-"+str(index)})
+            assert res.status_code==201,("contributor",res.status_code)
+        overshoot=client.post("/api/admin/rewards/"+str(deal_id)+"/contributors",headers=auth,json={
+            "application_id":aids[0],"role":"verification","allocation_pct":10,
+            "agreement_reference":"QA-OVER-"+nonce})
+        assert overshoot.status_code==409,"allocation cap bypassed"
+        signed=client.post("/api/admin/rewards/"+str(deal_id)+"/sign",headers=auth,json={"signed_reference":"QA-SIGNED-"+nonce})
+        assert signed.status_code==200,("sign",signed.status_code)
+        unpaid=client.post("/api/admin/rewards/"+str(deal_id)+"/approve-settlements",headers=auth,json={"confirm_compliance_review":True})
+        assert unpaid.status_code==409,"settlement approved without commission"
+        receipt=client.post(receipt_path,headers=auth,json={
+            "amount_won":2500000,"bank_reference":"QA-BANK-"+nonce,"confirm_bank_received":True})
+        assert receipt.status_code==201,("commission receipt",receipt.status_code)
+        duplicate=client.post(receipt_path,headers=auth,json={
+            "amount_won":2500000,"bank_reference":"QA-BANK-"+nonce,"confirm_bank_received":True})
+        assert duplicate.status_code==409,"duplicate receipt accepted"
+        lst=client.get("/api/admin/rewards",headers=auth)
+        assert lst.status_code==200
+        item=next(x for x in lst.get_json()["deals"] if x["id"]==deal_id)
+        assert (item["commission_ceiling_won"],item["commission_received_won"],
+                item["reward_pool_won"],item["jbro_retained_before_costs_won"]) == (2500000,2500000,750000,1750000),("split",item)
+        ok=client.post("/api/admin/rewards/"+str(deal_id)+"/approve-settlements",headers=auth,json={"confirm_compliance_review":True})
+        assert ok.status_code==200,("approve",ok.status_code)
+        repeated=client.post("/api/admin/rewards/"+str(deal_id)+"/approve-settlements",headers=auth,json={"confirm_compliance_review":True})
+        assert repeated.status_code==409,"double approval allowed"
+        post=client.post(receipt_path,headers=auth,json={
+            "amount_won":10000,"bank_reference":"QA-POST-"+nonce,"confirm_bank_received":True})
+        assert post.status_code==409,"receipt after settlement allowed"
+        lst=client.get("/api/admin/rewards",headers=auth).get_json()
+        item=next(x for x in lst["deals"] if x["id"]==deal_id)
+        assert sorted(c["approved_won"] for c in item["contributors"])==[375000,375000]
+        assert all(c["settlement_status"]=="approved" for c in item["contributors"])
+        assert client.get("/api/admin/rewards").status_code==401
+        # Partner sees only its individual own portion; use an ephemeral hashed credential.
+        access=client.post("/api/admin/applications/"+str(aids[0])+"/issue-access",headers=auth)
+        assert access.status_code==200
+        key=access.get_json()["access_token"]
+        mine=client.get("/api/partner/rewards",headers={"Authorization":"Bearer "+key})
+        assert mine.status_code==200 and len(mine.get_json()["rewards"])==1
+        assert mine.get_json()["rewards"][0]["approved_won"]==375000
+        log=logger.info("JBRO_REWARDS_SMOKE_PASS")
+    finally:
+        with DB() as conn:
+            with conn.cursor() as cur:
+                if deal_id:
+                    row=cur.execute("SELECT id FROM reward_deals WHERE id=%s AND title=%s",
+                        (deal_id,"JBRO synthetic commercial accounting QA "+nonce)).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM reward_audit WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_settlements WHERE contributor_id IN (SELECT id FROM reward_contributors WHERE deal_id=%s)",(deal_id,))
+                        cur.execute("DELETE FROM reward_receipts WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_contributors WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_deals WHERE id=%s",(deal_id,))
+                for aid in aids:
+                    row=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND organization LIKE %s",
+                        (aid,"JBRO_REWARD_TEST_"+nonce+"_%")).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM partner_access WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
