@@ -1,3 +1,20 @@
+## Deal Rewards 2.5% — accounting MVP (2026-11-16)
+
+Purpose: share **a portion of the 2.5% fee actually received by JBRO on one agreed side of a trade**, not 2.5% of the entire deal as a participation reward.
+
+- Source: `jbro-network-api/rewards.py`, registered in `server.py`. Neon DB tables: `reward_deals`, `reward_contributors`, `reward_receipts`, `reward_settlements`, `reward_audit`.
+- Financial unit: KRW integer won only. Fee = transaction amount * 250 / 10,000, truncated to won. Reward pool = actually received JBRO commission * assigned share (default 30%, maximum 40%). Not tax- or expense-adjusted. No forex conversion.
+- Only the admin can record new draft pools and assign approved partner participation with separate written individual fee/role references. Allocations must add to exactly 100% before a pool can be marked signed. The admin's signed-reference entry is an assertion, not automatic legal document validation.
+- Only admin-confirmed **actual commission receipts** with a bank statement reference enter the ledger. Cumulative receipts cannot exceed the contractual 2.5% ceiling. Once a settlement is approved, receipt recording for the pool is locked; additional receipts require a later formally designed adjustment/true-up workflow.
+- The admin can approve settlement amounts only after receipt, signed-reference, complete allocation and affirmative compliance check. Individual settlement approvals cannot be repeated. Integer division residuals remain unallocated within JBRO's funds.
+- No funds are sent by this service. The mark-paid endpoint only records an independently confirmed bank transfer reference; it is not a disbursement mechanism.
+- Partners see only their own **signed** deal allocations and approved/paid ledger amounts. The system does not expose other partners' names, share percentages or private offers. XP remains separate and has no claim on money.
+- Temporary `JBRO_REWARD_SMOKE_TEST=1` runs a synthetic test at startup including actual Neon DB CRUD for two partners, 100m KRW trade value, 2.5m KRW commission receipt, 750k KRW reward pool and 1.75m KRW retained before costs, duplicate prevention, access isolation, and scoped cleanup. **Disable after successful verification.**
+- Privacy, partner KYC/AML or sanctions screening, documented authority/fee agreement, Korean and cross-border tax/legal review, invoices, retention schedule, reversal/chargeback process, bank reconciliation, MFA, and independent security audit remain required before real financial settlement.
+- No actual commission receipts or third-party payouts have been recorded or authorized by this initial rollout.
+
+---
+
 ## JBRO TradeQuest — first live release (2026-11-16)
 
 - Partner page: https://jbro-network-api.onrender.com/partner (invite-only)
