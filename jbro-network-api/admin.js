@@ -68,7 +68,7 @@ function render(){
    card.append(ops);cards.append(card);
  }
 }
-async function refresh(){const [data,opps,missions,claims]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);}
+async function refresh(){const [data,opps,missions,claims,rewards]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);}
 function renderOpportunities(items){
  const root=$('opportunity-cards');root.replaceChildren();
  $('opportunity-message').textContent=items.length+' opportunity submissions';
@@ -133,6 +133,60 @@ $('quest-create').addEventListener('submit',async e=>{
  try{await api('/api/admin/tradequest/missions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('quest-title').value.trim(),description:$('quest-desc').value.trim(),category:$('quest-category').value,reward_xp:Number($('quest-reward').value)})});$('quest-create').reset();$('quest-admin-message').textContent='Draft mission created. Publish explicitly when ready.';await refresh();}
  catch(err){$('quest-admin-message').textContent='Create failed: '+err.message}
  finally{b.disabled=false}
+});
+function renderRewards(deals){
+ const root=$('reward-deals');root.replaceChildren();
+ const text=$('reward-message');
+ if(!deals.length){root.append(make('div','empty','No commission pools created yet.'));return;}
+ for(const d of deals){
+  const card=make('article','application');
+  card.append(make('div','id','Deal '+d.id+' · '+d.status),make('h2','',d.title));
+  card.append(make('div','details','Contract value '+Number(d.deal_value_won).toLocaleString('ko-KR')+' KRW · Commission '+d.fee_bps/100+'% · Reward share '+d.reward_share_pct+'%'));
+  card.append(make('p','', 'Received: '+Number(d.commission_received_won).toLocaleString('ko-KR')+' KRW · Reward pool: '+Number(d.reward_pool_won).toLocaleString('ko-KR')+' KRW · Allocated: '+d.allocation_total_pct+'%'));
+  for(const c of d.contributors)card.append(make('div','details',c.organization+' / '+c.role+' / '+c.allocation_pct+'% / '+(c.settlement_status||'not approved')+' / '+(c.approved_won===null?'—':Number(c.approved_won).toLocaleString('ko-KR')+' KRW')));
+  const control=(label,fields,submit,confirmation)=>{
+    const f=make('form','');f.style.marginTop='15px';
+    const inputs={};
+    for(const field of fields){
+      const l=make('label','',field.label);const el=document.createElement('input');
+      el.required=true;el.type=field.type||'text';el.placeholder=field.placeholder||'';if(field.min)el.min=field.min;if(field.max)el.max=field.max;
+      l.append(el);f.append(l);inputs[field.key]=el;
+    }
+    const b=make('button','',label);b.type='submit';f.append(b);
+    f.addEventListener('submit',async e=>{
+      e.preventDefault();if(!f.reportValidity()||!confirm(confirmation))return;
+      b.disabled=true;
+      try{await submit(Object.fromEntries(Object.entries(inputs).map(([key,value])=>[key,value.value])));text.textContent='Saved. This application has not transferred any funds.';await refresh();}
+      catch(err){text.textContent='Not saved: '+err.message}finally{b.disabled=false}
+    });
+    card.append(f);
+  };
+  if(d.status==='draft'){
+    control('Add contributor',[
+      {key:'application_id',label:'Approved partner application ID',type:'number',min:'1'},
+      {key:'role',label:'Contribution role (buyer_introduction / supplier_introduction / verification / execution)'},
+      {key:'allocation_pct',label:'Percentage of reward pool',type:'number',min:'1',max:'100'},
+      {key:'agreement_reference',label:'Individual written terms reference'}
+    ],v=>api('/api/admin/rewards/'+d.id+'/contributors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({application_id:Number(v.application_id),role:v.role,allocation_pct:Number(v.allocation_pct),agreement_reference:v.agreement_reference})}),'Add this contributor and allocation?');
+    control('Record agreement as signed',[{key:'signed_reference',label:'Signed reward agreement / evidence reference'}],v=>api('/api/admin/rewards/'+d.id+'/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}),'Confirm that all participants have signed the relevant agreement and allocations total 100%?');
+  }
+  if(d.status==='signed' && !d.contributors.some(c=>c.settlement_status)){
+    control('Record received commission',[{key:'amount_won',label:'Actual JBRO commission received (KRW)',type:'number',min:'1'},{key:'bank_reference',label:'Verifiable bank receipt reference'}],v=>api('/api/admin/rewards/'+d.id+'/receipts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...v,amount_won:Number(v.amount_won),confirm_bank_received:true})}),'Confirm bank statement proves JBRO received this commission?');
+    const approve=make('button','', 'Approve partner ledger amounts (no transfer)');
+    approve.type='button';approve.addEventListener('click',async()=>{
+      if(!confirm('Confirm all contractual, identity, tax and compliance checks are complete? This approves ledger amounts only.'))return;
+      approve.disabled=true;
+      try{await api('/api/admin/rewards/'+d.id+'/approve-settlements',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_compliance_review:true})});text.textContent='Settlement ledger approved. No payments sent.';await refresh()}
+      catch(e){text.textContent='Not approved: '+e.message}finally{approve.disabled=false}
+    });card.append(approve);
+  }
+  root.append(card);
+ }
+}
+$('reward-create').addEventListener('submit',async e=>{
+ e.preventDefault();const b=$('reward-create').querySelector('button[type=submit]');b.disabled=true;
+ try{await api('/api/admin/rewards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('reward-title').value.trim(),deal_value_won:Number($('reward-value').value),reward_share_pct:Number($('reward-share').value)})});$('reward-create').reset();$('reward-message').textContent='Draft created; does not establish a contractual obligation.';await refresh();}
+ catch(err){$('reward-message').textContent=err.message}finally{b.disabled=false}
 });
 $('login-form').addEventListener('submit',async e=>{
  e.preventDefault();token=$('token').value.trim();loginMessage.textContent='Verifying access...';
