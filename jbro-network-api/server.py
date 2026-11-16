@@ -470,10 +470,12 @@ import tradequest
 import rewards
 import contracts
 import dealrooms
+import execution
 tradequest.init(app, connection, authorized_admin, authorized_partner_id)
 rewards.init(app, connection, authorized_admin, authorized_partner_id)
 contracts.init(app, connection, authorized_admin, authorized_partner_id)
 dealrooms.init(app, connection, authorized_admin, authorized_partner_id)
+execution.init(app, connection, authorized_admin, authorized_partner_id)
 
 # Check real database connectivity once per worker startup. No secrets or records in logs.
 try:
@@ -482,6 +484,7 @@ try:
     rewards.ensure_schema()
     contracts.ensure_schema()
     dealrooms.ensure_schema()
+    execution.ensure_schema()
     app.logger.info("JBRO_NEON_DB_STARTUP_READY")
     if os.getenv("JBRO_SMOKE_TEST") == "1":
         smoke_test()
@@ -495,6 +498,8 @@ try:
         contracts.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
     if os.getenv("JBRO_DEALROOM_SMOKE_TEST") == "1":
         dealrooms.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
+    if os.getenv("JBRO_EXECUTION_SMOKE_TEST") == "1":
+        execution.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
 except Exception:
     app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
 
