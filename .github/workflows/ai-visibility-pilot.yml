@@ -52,11 +52,23 @@ jobs:
         if: ${{ inputs.execute_paid_calls == true }}
         working-directory: ai-visibility
         run: python3 tools/validate_evidence.py evidence-openai.json
-      - name: Save evidence as private GitHub run artifact (retained 1 day)
-        if: ${{ inputs.execute_paid_calls == true && success() }}
+      - name: Encrypt evidence before artifact upload
+        if: ${{ inputs.execute_paid_calls && success() }}
+        working-directory: ai-visibility
+        env:
+          EVIDENCE_ENCRYPTION_PASSWORD: ${{ secrets.EVIDENCE_ENCRYPTION_PASSWORD }}
+        run: |
+          if [ -z "$EVIDENCE_ENCRYPTION_PASSWORD" ]; then
+            echo "::error::EVIDENCE_ENCRYPTION_PASSWORD secret is required before retaining evidence"
+            exit 1
+          fi
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in evidence-openai.json -out evidence-openai.json.enc -pass env:EVIDENCE_ENCRYPTION_PASSWORD
+          rm -f evidence-openai.json
+      - name: Upload encrypted evidence only (1 day)
+        if: ${{ inputs.execute_paid_calls && success() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ai-visibility-evidence
-          path: ai-visibility/evidence-openai.json
+          name: ai-visibility-evidence-encrypted
+          path: ai-visibility/evidence-openai.json.enc
           retention-days: 1
           if-no-files-found: error
