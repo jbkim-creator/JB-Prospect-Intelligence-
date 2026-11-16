@@ -128,77 +128,36 @@ async function refreshContracts(){
    root.append(panel);
  }
 }
+function partnerCurrency(minor,currency){
+ const usd=currency==='USD',value=Number(minor)/(usd?100:1);
+ return new Intl.NumberFormat(usd?'en-US':'ko-KR',{style:'currency',currency:usd?'USD':'KRW',minimumFractionDigits:usd?2:0,maximumFractionDigits:usd?2:0}).format(value);
+}
 async function refreshFirstCoupon(){
  const data=await api('/api/partner/first-trade-coupon');
  const c=data.coupon;
+ const isKo=window.JBRO_PARTNER_LANG&&window.JBRO_PARTNER_LANG.get()==='ko';
  $('first-coupon-status').textContent=c
-  ?('FIRST10K assigned to Deal Room '+c.deal_room_id+' · Fee discount: US
-  :'FIRST10K (USD) offer available to request at partner screening. Eligibility and approval are not guaranteed.';
+  ?((isKo?'FIRST10K 적용 거래실 ':'FIRST10K assigned to Deal Room ')+c.deal_room_id+
+    (isKo?' · 수수료 할인: ':' · Fee discount: ')+partnerCurrency(c.discount_minor,c.currency||'USD'))
+  :(window.JBRO_PARTNER_LANG?window.JBRO_PARTNER_LANG.t('FIRST10K (USD) offer available to request at partner screening. Eligibility and approval are not guaranteed.'):'FIRST10K (USD) offer available to request at partner screening. Eligibility and approval are not guaranteed.');
 }
 async function refreshRewards(){
-  const root=$('reward-list');root.replaceChildren();
-  const data=await api('/api/partner/rewards');
-  if(!data.rewards.length){root.append(el('div','empty','No signed partner reward agreements yet.'));return}
-  for(const r of data.rewards){
-    const div=el('article','opp-card');
-    div.append(el('h3','',r.title),el('div','meta',r.role.replaceAll('_',' ')+' · '+r.allocation_pct+'% of agreed reward pool'));
-    div.append(el('p','',r.approved_won===null?'No payable amount approved yet.':'Ledger amount: '+(r.currency==='USD'?'US));
-    root.append(div);
-  }
+ const root=$('reward-list');root.replaceChildren();
+ const data=await api('/api/partner/rewards');
+ const isKo=window.JBRO_PARTNER_LANG&&window.JBRO_PARTNER_LANG.get()==='ko';
+ if(!data.rewards.length){root.append(el('div','empty','No signed partner reward agreements yet.'));return}
+ for(const r of data.rewards){
+  const div=el('article','opp-card');
+  div.append(el('h3','',r.title),el('div','meta',r.role.replaceAll('_',' ')+' · '+r.allocation_pct+'% '+(isKo?'리워드 풀 배분':'of agreed reward pool')));
+  const summary=r.approved_won===null
+   ?(isKo?'아직 승인된 지급 금액이 없습니다.':'No payable amount approved yet.')
+   :((isKo?'정산 원장 금액: ':'Ledger amount: ')+partnerCurrency(r.approved_won,r.currency||'KRW')+' · '+r.settlement_status);
+  div.append(el('p','',summary));root.append(div);
+ }
 }
 async function refresh(){await refreshQuests();await refreshFirstCoupon();await refreshSaleRooms();await refreshContracts();await refreshRewards();const data=await api('/api/partner/opportunities');$('list').replaceChildren();if(!data.opportunities.length){$('list').append(el('div','empty','No opportunities submitted yet.'));return}for(const item of data.opportunities){const div=el('article','opp-card');div.append(el('div','ref','JBRO-O-'+String(item.id).padStart(6,'0')),el('h3','',item.title),el('div','meta',item.category.replaceAll('_',' ')+' · '+item.status+' · '+(item.country||'Region unspecified')),el('p','desc',item.summary));$('list').append(div)}}
 $('login').addEventListener('submit',async e=>{e.preventDefault();token=$('key').value.trim();$('login-status').textContent=window.JBRO_PARTNER_LANG.t('Verifying your invitation...');try{const me=await api('/api/partner/me');$('identity').textContent=me.partner.organization+' · '+me.partner.role;$('key').value='';screen.hidden=true;workspace.hidden=false;await refresh()}catch(err){$('login-status').textContent=err.message}});
 $('opp').addEventListener('submit',async e=>{e.preventDefault();if(!$('opp').reportValidity())return;const btn=$('opp').querySelector('button[type=submit]');btn.disabled=true;$('submit-status').textContent=window.JBRO_PARTNER_LANG.t('Submitting...');try{const body={category:$('category').value,title:$('title').value.trim(),country:$('country').value.trim(),summary:$('summary').value.trim(),confirm_nonconfidential:$('confirm').checked};const result=await api('/api/partner/opportunities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('submit-status').textContent='Submitted for JBRO review: '+result.reference;$('opp').reset();await refresh()}catch(err){$('submit-status').textContent='Not submitted: '+err.message}finally{btn.disabled=false}});
-$('refresh').addEventListener('click',async()=>{try{await refresh();$('list-status').textContent='Updated.'}catch(err){$('list-status').textContent=err.message}});
-$('signout').addEventListener('click',()=>out('Workspace locked.'));
-window.addEventListener('pagehide',()=>{token=null});
-})();+(Number(c.discount_minor)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))
-  :'FIRST10M offer available to request at partner screening. Eligibility and approval are not guaranteed.';
-}
-async function refreshRewards(){
-  const root=$('reward-list');root.replaceChildren();
-  const data=await api('/api/partner/rewards');
-  if(!data.rewards.length){root.append(el('div','empty','No signed partner reward agreements yet.'));return}
-  for(const r of data.rewards){
-    const div=el('article','opp-card');
-    div.append(el('h3','',r.title),el('div','meta',r.role.replaceAll('_',' ')+' · '+r.allocation_pct+'% of agreed reward pool'));
-    div.append(el('p','',r.approved_won===null?'No payable amount approved yet.':'Ledger amount: '+Number(r.approved_won).toLocaleString('ko-KR')+' KRW · '+r.settlement_status));
-    root.append(div);
-  }
-}
-async function refresh(){await refreshQuests();await refreshFirstCoupon();await refreshSaleRooms();await refreshContracts();await refreshRewards();const data=await api('/api/partner/opportunities');$('list').replaceChildren();if(!data.opportunities.length){$('list').append(el('div','empty','No opportunities submitted yet.'));return}for(const item of data.opportunities){const div=el('article','opp-card');div.append(el('div','ref','JBRO-O-'+String(item.id).padStart(6,'0')),el('h3','',item.title),el('div','meta',item.category.replaceAll('_',' ')+' · '+item.status+' · '+(item.country||'Region unspecified')),el('p','desc',item.summary));$('list').append(div)}}
-$('login').addEventListener('submit',async e=>{e.preventDefault();token=$('key').value.trim();$('login-status').textContent='Verifying your invitation...';try{const me=await api('/api/partner/me');$('identity').textContent=me.partner.organization+' · '+me.partner.role;$('key').value='';screen.hidden=true;workspace.hidden=false;await refresh()}catch(err){$('login-status').textContent=err.message}});
-$('opp').addEventListener('submit',async e=>{e.preventDefault();if(!$('opp').reportValidity())return;const btn=$('opp').querySelector('button[type=submit]');btn.disabled=true;$('submit-status').textContent='Submitting...';try{const body={category:$('category').value,title:$('title').value.trim(),country:$('country').value.trim(),summary:$('summary').value.trim(),confirm_nonconfidential:$('confirm').checked};const result=await api('/api/partner/opportunities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('submit-status').textContent='Submitted for JBRO review: '+result.reference;$('opp').reset();await refresh()}catch(err){$('submit-status').textContent='Not submitted: '+err.message}finally{btn.disabled=false}});
-$('refresh').addEventListener('click',async()=>{try{await refresh();$('list-status').textContent='Updated.'}catch(err){$('list-status').textContent=err.message}});
-$('signout').addEventListener('click',()=>out('Workspace locked.'));
-window.addEventListener('pagehide',()=>{token=null});
-})();+(Number(r.approved_won)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):Number(r.approved_won).toLocaleString('ko-KR')+' KRW')+' · '+r.settlement_status));
-    root.append(div);
-  }
-}
-async function refresh(){await refreshQuests();await refreshFirstCoupon();await refreshSaleRooms();await refreshContracts();await refreshRewards();const data=await api('/api/partner/opportunities');$('list').replaceChildren();if(!data.opportunities.length){$('list').append(el('div','empty','No opportunities submitted yet.'));return}for(const item of data.opportunities){const div=el('article','opp-card');div.append(el('div','ref','JBRO-O-'+String(item.id).padStart(6,'0')),el('h3','',item.title),el('div','meta',item.category.replaceAll('_',' ')+' · '+item.status+' · '+(item.country||'Region unspecified')),el('p','desc',item.summary));$('list').append(div)}}
-$('login').addEventListener('submit',async e=>{e.preventDefault();token=$('key').value.trim();$('login-status').textContent='Verifying your invitation...';try{const me=await api('/api/partner/me');$('identity').textContent=me.partner.organization+' · '+me.partner.role;$('key').value='';screen.hidden=true;workspace.hidden=false;await refresh()}catch(err){$('login-status').textContent=err.message}});
-$('opp').addEventListener('submit',async e=>{e.preventDefault();if(!$('opp').reportValidity())return;const btn=$('opp').querySelector('button[type=submit]');btn.disabled=true;$('submit-status').textContent='Submitting...';try{const body={category:$('category').value,title:$('title').value.trim(),country:$('country').value.trim(),summary:$('summary').value.trim(),confirm_nonconfidential:$('confirm').checked};const result=await api('/api/partner/opportunities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('submit-status').textContent='Submitted for JBRO review: '+result.reference;$('opp').reset();await refresh()}catch(err){$('submit-status').textContent='Not submitted: '+err.message}finally{btn.disabled=false}});
-$('refresh').addEventListener('click',async()=>{try{await refresh();$('list-status').textContent='Updated.'}catch(err){$('list-status').textContent=err.message}});
-$('signout').addEventListener('click',()=>out('Workspace locked.'));
-window.addEventListener('pagehide',()=>{token=null});
-})();+(Number(c.discount_minor)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))
-  :'FIRST10M offer available to request at partner screening. Eligibility and approval are not guaranteed.';
-}
-async function refreshRewards(){
-  const root=$('reward-list');root.replaceChildren();
-  const data=await api('/api/partner/rewards');
-  if(!data.rewards.length){root.append(el('div','empty','No signed partner reward agreements yet.'));return}
-  for(const r of data.rewards){
-    const div=el('article','opp-card');
-    div.append(el('h3','',r.title),el('div','meta',r.role.replaceAll('_',' ')+' · '+r.allocation_pct+'% of agreed reward pool'));
-    div.append(el('p','',r.approved_won===null?'No payable amount approved yet.':'Ledger amount: '+Number(r.approved_won).toLocaleString('ko-KR')+' KRW · '+r.settlement_status));
-    root.append(div);
-  }
-}
-async function refresh(){await refreshQuests();await refreshFirstCoupon();await refreshSaleRooms();await refreshContracts();await refreshRewards();const data=await api('/api/partner/opportunities');$('list').replaceChildren();if(!data.opportunities.length){$('list').append(el('div','empty','No opportunities submitted yet.'));return}for(const item of data.opportunities){const div=el('article','opp-card');div.append(el('div','ref','JBRO-O-'+String(item.id).padStart(6,'0')),el('h3','',item.title),el('div','meta',item.category.replaceAll('_',' ')+' · '+item.status+' · '+(item.country||'Region unspecified')),el('p','desc',item.summary));$('list').append(div)}}
-$('login').addEventListener('submit',async e=>{e.preventDefault();token=$('key').value.trim();$('login-status').textContent='Verifying your invitation...';try{const me=await api('/api/partner/me');$('identity').textContent=me.partner.organization+' · '+me.partner.role;$('key').value='';screen.hidden=true;workspace.hidden=false;await refresh()}catch(err){$('login-status').textContent=err.message}});
-$('opp').addEventListener('submit',async e=>{e.preventDefault();if(!$('opp').reportValidity())return;const btn=$('opp').querySelector('button[type=submit]');btn.disabled=true;$('submit-status').textContent='Submitting...';try{const body={category:$('category').value,title:$('title').value.trim(),country:$('country').value.trim(),summary:$('summary').value.trim(),confirm_nonconfidential:$('confirm').checked};const result=await api('/api/partner/opportunities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('submit-status').textContent='Submitted for JBRO review: '+result.reference;$('opp').reset();await refresh()}catch(err){$('submit-status').textContent='Not submitted: '+err.message}finally{btn.disabled=false}});
 $('refresh').addEventListener('click',async()=>{try{await refresh();$('list-status').textContent='Updated.'}catch(err){$('list-status').textContent=err.message}});
 $('signout').addEventListener('click',()=>out('Workspace locked.'));
 window.addEventListener('pagehide',()=>{token=null});
