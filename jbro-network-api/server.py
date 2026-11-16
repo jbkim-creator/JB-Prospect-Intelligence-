@@ -73,7 +73,7 @@ def headers(response):
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Content-Security-Policy"] = ("default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; connect-src 'self'" if request.path in ("/admin", "/admin.js", "/admin.css", "/partner", "/partner.js", "/partner.css") else "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+    response.headers["Content-Security-Policy"] = ("default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; connect-src 'self'" if request.path in ("/admin", "/admin.js", "/admin.css", "/partner", "/partner.js", "/partner.css", "/partner-locale.js") else "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
     if request.headers.get("Origin") == ALLOWED_ORIGIN:
         response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
@@ -100,6 +100,10 @@ def partner_console():
 @app.get("/partner.js")
 def partner_script():
     return send_from_directory(os.path.dirname(__file__), "partner.js", mimetype="application/javascript")
+
+@app.get("/partner-locale.js")
+def partner_locale_script():
+    return send_from_directory(os.path.dirname(__file__), "partner-locale.js", mimetype="application/javascript")
 
 @app.get("/partner.css")
 def partner_style():
