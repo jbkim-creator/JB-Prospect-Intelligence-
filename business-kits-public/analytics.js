@@ -16,6 +16,21 @@ document.addEventListener('DOMContentLoaded',()=>{
  const campaign=params.get('utm_campaign')||'';
  const source=params.get('utm_source')||'';
  const content=params.get('utm_content')||'';
+ // Preserve attribution in links between our own HTML pages without cookies or storage.
+ if(source || content || campaign){
+  document.querySelectorAll('a[href]').forEach(a=>{
+   if(a.href.startsWith('mailto:')) return;
+   try {
+    const dest=new URL(a.href,location.href);
+    if(dest.origin!==location.origin || !/\\.html$/.test(dest.pathname))return;
+    ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(k=>{
+     const v=params.get(k);
+     if(v && !dest.searchParams.has(k))dest.searchParams.set(k,v);
+    });
+    a.href=dest.href;
+   }catch(_){}
+  });
+ }
  if(source || content || campaign){
   document.querySelectorAll('a[href^="mailto:"]').forEach(a=>{
    const u=new URL(a.href);const q=new URLSearchParams(u.search);
