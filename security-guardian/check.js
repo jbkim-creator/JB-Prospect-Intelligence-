@@ -59,7 +59,15 @@
     if(txt===null){add('SPF 이메일 발신 정책','unknown','DNS 조회에 실패했습니다. 잠시 후 다시 확인해 주세요.');}
     else { const spf=txt.map(stripTxt).filter(x=>/^v=spf1(?:\s|$)/i.test(x));
       if (spf.length>1) add('SPF 이메일 발신 정책','warn','SPF 레코드가 여러 개입니다. 구성 오류 가능성이 있습니다.',spf[0]);
-      else if(spf.length===1) add('SPF 이메일 발신 정책','good','SPF 정책이 존재합니다. 실제 허용 발신자 구성은 별도 검증이 필요합니다.',spf[0]);
+      else if(spf.length===1) {
+        const policy=spf[0];
+        const tokens=policy.toLowerCase().split(/\s+/).slice(1);
+        const all=tokens.find(x=>/^[+~?-]?all$/.test(x));
+        if(all==='+all'||all==='all'||all==='?all') add('SPF 이메일 발신 정책','warn','SPF 정책이 존재하지만 전체 발신자를 허용하거나 중립 처리하는 종료 규칙입니다. 정책 강화가 필요합니다.',policy);
+        else if(all==='~all') add('SPF 이메일 발신 정책','info','SPF 소프트페일(~all) 정책이 있습니다. 발신 시스템 검증 후 강화 가능성을 검토하세요.',policy);
+        else if(all==='-all') add('SPF 이메일 발신 정책','good','SPF 제한 정책(-all)이 확인됩니다. 실제 발신 시스템과 포함 규칙은 별도 검증이 필요합니다.',policy);
+        else add('SPF 이메일 발신 정책','info','SPF 레코드가 있지만 명확한 all 종료 규칙은 확인되지 않습니다. 정책 전문가 검토를 권장합니다.',policy);
+      }
       else add('SPF 이메일 발신 정책','warn','SPF 정책을 찾지 못했습니다. 이메일 위조 방어 설정을 확인하세요.');
     }
     if(dmarcTxt===null){add('DMARC 이메일 인증 정책','unknown','DNS 조회에 실패했습니다.');}
