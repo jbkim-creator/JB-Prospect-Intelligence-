@@ -49,7 +49,7 @@
     results.replaceChildren();detail.hidden=true;checkedAt.textContent='';
     let domain;try {domain=normalize(field.value);} catch(e) {summary.textContent=e.message;return;}
     button.disabled=true;button.textContent='공개 DNS 확인 중...';
-    summary.textContent=domain+'의 공개 DNS 레코드를 조회하고 있습니다. 고객 서버에는 접속하지 않습니다.';
+    summary.textContent=domain+'의 공개 DNS 레코드를 조회하고 있습니다. HTTPS 검사에서는 해당 웹서버에 HEAD 요청 1회가 발생합니다.';
     const specs=[['txt',domain,'TXT'],['dmarc','_dmarc.'+domain,'TXT'],['mx',domain,'MX'],['caa',domain,'CAA'],['ds',domain,'DS']];
     const outcomes=await Promise.allSettled(specs.map(([key,name,type])=>query(name,type)));
     const get=i => outcomes[i].status==='fulfilled' ? outcomes[i].value : null;
