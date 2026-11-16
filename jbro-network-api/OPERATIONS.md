@@ -1,3 +1,17 @@
+## Buyer–Seller Deal Rooms — 2026-11-16
+
+- Code `jbro-network-api/dealrooms.py`. Administrator creates private KRW sale terms identifying two approved buyer/seller partner applications; one optional linked draft `reward_deals` record must have the same total deal value.
+- Sale terms capture verified-by-operator **names as entered**, description, quantity/unit, amount, delivery, inspection, payment, governing law, dispute resolution, and optional additional terms. They are not automatically verified by law firms, banks, inspection agencies or buyer/seller registries.
+- Admin issues immutable SHA-256-identified version 1 draft for both parties to view. Only approved linked buyer and seller can retrieve it or accept using individual partner access; a third partner is denied. Both must separately declare representative authority and agree to the exact frozen hash.
+- Database `deal_rooms`, `deal_sale_contracts`, `deal_sale_assents`, `deal_room_audit`; optional link `deal_rooms.reward_deal_id` to separate 2.5% JBRO fee and partner reward pool.
+- Linked fee/reward contract can only finalize after the buyer/seller sale document status is signed. Even then no commission is presumed received and no bank transfer is performed by the app.
+- Live Neon-backed integration test: `JBRO_DEALROOM_SMOKE_PASS` from Render. Verified third-party access denial, wrong document-hash rejection, bilateral signatures, isolation, linked reward contract blocker and post-sign settlement blocked without actual fee receipt. All synthetic records cleaned up; Neon reported zero rooms, zero signatures, zero reward deals and zero synthetic applicants after test. Temporary smoke-test environment flag `JBRO_DEALROOM_SMOKE_TEST` was switched back to 0 and a normal deploy requested.
+- Admin UI: https://jbro-network-api.onrender.com/admin ; partner UI: https://jbro-network-api.onrender.com/partner ; both require existing authentication.
+- **Critical commercial boundary:** this is a pilot contract acceptance workflow, NOT a legal guarantee of valid e-signatures, identity authentication, signer authority, contract enforceability, escrow, invoice issuance, shipment, asset transfer, goods quality, or cash payment. No external customer has entered or signed a live sale in this rollout. Agreement templates are placeholders requiring jurisdiction-specific legal advice, actual registered legal entities, authority checks, tax, sanctions/export-control checks, Incoterms and dispute provisions. Current access keys are long-lived and not multi-factor authenticated; implement stronger authenticated signatures, downloadable signed copies, an audit archive, amendment/cancellation workflow, and legal review before using for high-value binding transactions.
+- Current version supports **one immutable version 1 per room**; edits after issue are intentionally disabled. To amend terms, start a new room until a supersession workflow is implemented.
+
+---
+
 ## In-platform participation/reward agreements — 2026-11-16
 
 Implemented `jbro-network-api/contracts.py`. Routes:
