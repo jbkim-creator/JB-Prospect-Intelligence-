@@ -143,6 +143,7 @@ function renderRewards(deals){
   card.append(make('div','id','Deal '+d.id+' · '+d.status),make('h2','',d.title));
   card.append(make('div','details','Contract value '+Number(d.deal_value_won).toLocaleString('ko-KR')+' KRW · Commission '+d.fee_bps/100+'% · Reward share '+d.reward_share_pct+'%'));
   card.append(make('p','', 'Received: '+Number(d.commission_received_won).toLocaleString('ko-KR')+' KRW · Reward pool: '+Number(d.reward_pool_won).toLocaleString('ko-KR')+' KRW · Allocated: '+d.allocation_total_pct+'%'));
+  card.append(make('p','', 'FIRST10M discount: '+Number(d.coupon_discount_won||0).toLocaleString('ko-KR')+' KRW · Net fee ceiling: '+Number(d.commission_ceiling_won).toLocaleString('ko-KR')+' KRW'));
   for(const c of d.contributors)card.append(make('div','details',c.organization+' / '+c.role+' / '+c.allocation_pct+'% / '+(c.settlement_status||'not approved')+' / '+(c.approved_won===null?'—':Number(c.approved_won).toLocaleString('ko-KR')+' KRW')));
   const control=(label,fields,submit,confirmation)=>{
     const f=make('form','');f.style.marginTop='15px';
@@ -161,6 +162,14 @@ function renderRewards(deals){
     });
     card.append(f);
   };
+  if(d.status==='draft'&&!d.coupon_holder_id){
+    control('Grant first-trade coupon (up to KRW 250,000 fee waiver)',[
+      {key:'application_id',label:'Approved first-time fee-paying buyer OR seller application ID',type:'number',min:'1'}
+    ],v=>api('/api/admin/rewards/'+d.id+'/first-trade-coupon',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({application_id:Number(v.application_id),confirm_eligibility_and_fee_terms:true})
+    }),'Verify this is the partner’s FIRST eligible deal, that they are an approved buyer or seller in the linked DRAFT Deal Room, and that their 2.5% JBRO fee stream is eligible for the one-time FIRST10M waiver. The contract must not already have been issued.');
+  }
   if(d.status==='draft'){
     control('Add contributor',[
       {key:'application_id',label:'Approved partner application ID',type:'number',min:'1'},
