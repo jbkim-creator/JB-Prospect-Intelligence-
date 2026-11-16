@@ -1,3 +1,16 @@
+## End-to-end write / review verification — 2026-11-16
+
+- Render deploy `dep-dbt951ff3r2c73ca7et0` reached `live`.
+- Server logs confirmed both `JBRO_NEON_DB_STARTUP_READY` and `JBRO_INTAKE_SMOKE_PASS`.
+- Gated smoke test invoked the deployed Flask app's HTTP routes via its internal test client using the **real Neon database**: submit synthetic application (201), admin list (200), admin review PATCH (200), persisted status read, unauthorized admin read (401).
+- Scoped synthetic application and its activity records were deleted immediately after verification; subsequent Neon SQL showed 0 application records and 0 activity records, including 0 `JBRO_SMOKE_TEST_%` rows.
+- The temporary smoke-test flag `JBRO_SMOKE_TEST` was set back to `0`; Render redeploy triggered.
+- This proves server-side route behavior with Neon; external browser form submission and actual customer approval remain untested.
+- Do not enable the smoke-test flag routinely. It is only for controlled release verification.
+- A manual admin dashboard is not implemented. Existing protected admin API accepts an admin bearer secret, which must never be published.
+
+---
+
 # Neon migration verified — 2026-11-16
 
 - Neon project: `jbro-os-network` (`misty-glitter-91914189`), database `jbro_os`, Singapore, PostgreSQL 17.
