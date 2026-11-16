@@ -243,7 +243,7 @@ def partner_rewards():
         aid=PARTNER()
         if aid is None:return err("unauthorized",401)
         with DB() as conn:
-            rows=conn.execute("""SELECT d.id AS deal_id,d.title,d.status AS deal_status,c.role,
+            rows=conn.execute("""SELECT d.id AS deal_id,d.title,d.currency,d.status AS deal_status,c.role,
                   c.allocation_pct,s.approved_won,s.status AS settlement_status
                   FROM reward_contributors c JOIN reward_deals d ON d.id=c.deal_id
                   LEFT JOIN reward_settlements s ON s.contributor_id=c.id
