@@ -55,11 +55,23 @@ jobs:
         run: |
           python3 tools/collect_openai_web_search.py --execute --confirm-paid-calls YES --max-calls ${{ inputs.max_calls }} --output evidence-openai.json
           python3 tools/validate_evidence.py evidence-openai.json
-      - name: Upload evidence for limited retrieval
+      - name: Encrypt evidence before artifact upload
+        if: ${{ inputs.approve_paid_calls && success() }}
+        working-directory: ai-visibility
+        env:
+          EVIDENCE_ENCRYPTION_PASSWORD: ${{ secrets.EVIDENCE_ENCRYPTION_PASSWORD }}
+        run: |
+          if [ -z "$EVIDENCE_ENCRYPTION_PASSWORD" ]; then
+            echo "::error::EVIDENCE_ENCRYPTION_PASSWORD secret is required before retaining evidence"
+            exit 1
+          fi
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in evidence-openai.json -out evidence-openai.json.enc -pass env:EVIDENCE_ENCRYPTION_PASSWORD
+          rm -f evidence-openai.json
+      - name: Upload encrypted evidence only (1 day)
         if: ${{ inputs.approve_paid_calls && success() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ai-visibility-evidence
-          path: ai-visibility/evidence-openai.json
+          name: ai-visibility-evidence-encrypted
+          path: ai-visibility/evidence-openai.json.enc
           retention-days: 1
           if-no-files-found: error
