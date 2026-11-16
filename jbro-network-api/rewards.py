@@ -171,6 +171,7 @@ def record_receipt(deal_id):
                 deal=cur.execute("SELECT deal_value_won,fee_bps,status FROM reward_deals WHERE id=%s FOR UPDATE",(deal_id,)).fetchone()
                 if not deal:return err("not_found",404)
                 if deal["status"]!="signed":return err("signed_agreement_required",409)
+                if cur.execute("SELECT 1 FROM reward_settlements s JOIN reward_contributors c ON c.id=s.contributor_id WHERE c.deal_id=%s LIMIT 1",(deal_id,)).fetchone():return err("settlement_locked_after_approval",409)
                 current=cur.execute("SELECT coalesce(sum(amount_won),0)::bigint AS total FROM reward_receipts WHERE deal_id=%s",(deal_id,)).fetchone()["total"]
                 if current+amount>deal["deal_value_won"]*deal["fee_bps"]//10000:return err("fee_receipts_exceed_ceiling",409)
                 row=cur.execute("""INSERT INTO reward_receipts(deal_id,amount_won,bank_reference)
@@ -211,7 +212,7 @@ def mark_paid(settlement_id):
     if not ADMIN():return err("unauthorized",401)
     body=request.get_json(silent=True)
     ref=body.get("payout_reference") if isinstance(body,dict) else None
-    if not isinstance(ref,str) or not 4<=len(ref.strip())<=160 or body.get("confirm_bank_payment") is not True:
+    if not isinstance(ref,str) or not 4<=len(ref.strip())<=160 or not isinstance(body,dict) or body.get("confirm_bank_payment") is not True:
         return err("payment_evidence_required")
     try:
         with DB() as conn:
