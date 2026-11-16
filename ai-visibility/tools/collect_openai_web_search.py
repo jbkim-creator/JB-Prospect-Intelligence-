@@ -71,7 +71,7 @@ def fetch(key, model, prompt, timeout):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--model", default="gpt-5.4")
+    ap.add_argument("--model", default="gpt-6-luna")
     ap.add_argument("--self-test", action="store_true", help="Run local parsing test; never makes an API request")
     ap.add_argument("--max-calls", type=int, default=3)
     ap.add_argument("--execute", action="store_true", help="Issue requests that may be billed")
