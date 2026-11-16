@@ -27,6 +27,19 @@ async function refreshQuests(){
    $('quest-list').append(div);
  }
 }
+function downloadRecord(filename,data){
+ const file=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(file),a=document.createElement('a');
+ a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function showExecutionPartner(roomId,slot,status){
+ slot.replaceChildren();const result=await api('/api/partner/deal-rooms/'+roomId+'/execution');
+ if(!result.events.length){slot.append(el('p','','No evidence reported for this deal yet.'));return}
+ for(const item of result.events){
+  const card=el('div','opp-card');card.append(el('div','meta',item.stage+' · '+item.status+' · '+item.organization),el('p','',item.evidence_reference),el('p','desc',item.note));slot.append(card);
+ }
+}
 async function refreshSaleRooms(){
  const root=$('sale-partner-rooms');root.replaceChildren();const status=$('sale-partner-status');
  const data=await api('/api/partner/deal-rooms');const rooms=data.rooms||[];
@@ -50,6 +63,44 @@ async function refreshSaleRooms(){
       catch(err){status.textContent='Not accepted: '+err.message}finally{btn.disabled=false}
     });card.append(form);
    }
+  }
+  if(d){
+    const btn=el('button','soft','Download contract record (JSON)');
+    btn.type='button';btn.addEventListener('click',async()=>{
+      try{const record=await api('/api/partner/deal-rooms/'+room.id+'/contract-export');
+      downloadRecord('JBRO-Deal-'+room.id+'-contract-record.json',record)}
+      catch(err){status.textContent='Download failed: '+err.message}
+    });card.append(btn);
+  }
+  if(room.status==='signed'){
+    const label=el('h3','','Execution evidence (pending independent review)');card.append(label);
+    const form=document.createElement('form');
+    const stageLabel=el('label','','Milestone');const select=document.createElement('select');
+    for(const v of ['inspection','shipment','delivery','payment']){
+      const option=document.createElement('option');option.value=v;option.textContent=v;select.append(option);
+    }stageLabel.append(select);
+    const refLabel=el('label','','Evidence reference or tracking number (no secrets)');const ref=document.createElement('input');
+    ref.minLength=4;ref.maxLength=180;ref.required=true;refLabel.append(ref);
+    const noteLabel=el('label','','Evidence description (no confidential documents)');const note=document.createElement('textarea');
+    note.minLength=10;note.maxLength=900;note.required=true;noteLabel.append(note);
+    const confirmLabel=el('label','check'),checkbox=document.createElement('input');
+    checkbox.type='checkbox';checkbox.required=true;
+    confirmLabel.append(checkbox,document.createTextNode(' I have authority to submit this truthful evidence. Submission does not certify completion.'));
+    const submit=el('button','','Submit evidence for JBRO review');submit.type='submit';
+    form.append(stageLabel,refLabel,noteLabel,confirmLabel,submit);
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();if(!form.reportValidity())return;submit.disabled=true;
+      try{await api('/api/partner/deal-rooms/'+room.id+'/execution',{method:'POST',
+       headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({stage:select.value,evidence_reference:ref.value.trim(),note:note.value.trim(),confirm_accurate_and_authorized:checkbox.checked})});
+       status.textContent='Evidence submitted; JBRO independent review pending.';form.reset();
+       await showExecutionPartner(room.id,events,status);
+      }catch(err){status.textContent='Submission failed: '+err.message}finally{submit.disabled=false}
+    });
+    card.append(form);
+    const button=el('button','soft','Refresh execution history');button.type='button';
+    const events=document.createElement('div');button.addEventListener('click',async()=>{try{await showExecutionPartner(room.id,events,status)}catch(err){status.textContent=err.message}});
+    card.append(button,events);
   }
   root.append(card);
  }
