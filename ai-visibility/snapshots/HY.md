@@ -26,3 +26,10 @@ ChatGPT/Gemini/Perplexity 노출·언급률, 실제 인용 링크, 경쟁사 노
 - 부품번호·브랜드·수량 기반 RFQ 경로 확인: https://www.hycorpo.com/contact-us
 - 공인 유통사 관련 공식 고지 확인: https://www.hycorpo.com/
 **중요:** 검색된 공식 웹페이지의 존재만 확인. ChatGPT/Gemini/Perplexity 추천 응답·언급률은 미측정.
+
+## 2026-11-16 추가 공개 웹검색 관찰 (AI 추천 실측 아님)
+- 일반 구매 의도 질문: `Find suppliers in South Korea for obsolete marine automation spare parts.`
+- 회사명·사업 분야를 포함한 추가 검색에서 공식 견적 페이지가 확인됨: https://www.hycorpo.com/contact-us
+- 공식 제품/비공인 유통사 관련 정보: https://www.hycorpo.com/
+- 제한: 회사명 포함 재검색의 발견 가능성은 일반적인 브랜드 비포함 질문에서의 추천과 다름.
+- 확인 불가: 실제 ChatGPT/Gemini/Perplexity 추천 여부, 추천률, 사용자 유입 및 구매 전환.
