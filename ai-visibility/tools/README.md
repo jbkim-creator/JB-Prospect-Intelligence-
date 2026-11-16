@@ -63,10 +63,29 @@ This is a local CLI, not a publicly exposed endpoint. The Render static website 
 An isolated manual workflow lives at `.github/workflows/ai-visibility-pilot.yml` on the feature branch.
 
 - Default manual input is `execute_paid_calls: false`, which runs offline tests and a dry run only.
-- Billable execution requires the operator to select true, choose 1 or 3 requests, and separately store `OPENAI_API_KEY` as an Actions repository secret.
+- Billable execution requires the operator to select true, choose 1 or 3 requests, and separately store `OPENAI_API_KEY` and a strong independent `EVIDENCE_ENCRYPTION_PASSWORD` as Actions repository secrets. Both must exist before any billable requests.
 - The workflow never runs on a schedule or on a code push.
-- Evidence artifact retention is one day; the artifact is not placed into the repository or public static site.
+- This repository is public. Evidence is **encrypted before artifact upload**, then the unencrypted runner file is deleted. The encrypted artifact expires after one day. Do not publish the encryption password or raw evidence.
 - GitHub's workflow_dispatch UI generally requires the workflow to exist on the default branch; it may not be available from this feature branch until an authorized merge or an isolated default-branch workflow addition.
 - Before any billable run, configure a provider-side usage limit and confirm GitHub Actions artifact access controls.
 
 This workflow does not bypass API authentication and is not evidence of a paid API call having run.
+
+## Default-branch manual workflow (safe entry point)
+
+The **manual-only** workflow is available at [GitHub Actions / JBRO AI Visibility safe pilot](https://github.com/jbkim-creator/JB-Prospect-Intelligence-/actions/workflows/jbro-ai-visibility-manual.yml). It checks out the isolated `feature/ai-visibility-mvp` branch and does not merge the app into `main`.
+
+1. In GitHub repo Settings → Secrets and variables → Actions, configure `OPENAI_API_KEY` (API project key) and `EVIDENCE_ENCRYPTION_PASSWORD` (long unique passphrase). Do not put either value in chat, code, or a form hosted by the public website.
+2. In Actions → **JBRO AI Visibility safe pilot** → Run workflow, leave `approve_paid_calls` unchecked to perform offline tests / dry run first. This has no OpenAI API charge.
+3. When the dry run and tests succeed and a project-level usage limit is set, check `approve_paid_calls` and select **1** request for the first paid sample.
+4. Download the `ai-visibility-evidence-encrypted` artifact within one day. It contains only `evidence-openai.json.enc` (encrypted). Decrypt locally with the same passphrase using:
+
+```bash
+export EVIDENCE_ENCRYPTION_PASSWORD='your private password'
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in evidence-openai.json.enc -out evidence-openai.json -pass env:EVIDENCE_ENCRYPTION_PASSWORD
+python3 tools/validate_evidence.py evidence-openai.json
+```
+
+5. Open `/report.html` and import the JSON, review full answers and record reviewer name + time in `/collect.html`; export updated evidence if desired. **Never upload plaintext client evidence to a public repository.**
+
+This workflow is opt-in only and has not yet made any paid API requests.
