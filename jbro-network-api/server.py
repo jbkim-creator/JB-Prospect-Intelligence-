@@ -188,16 +188,22 @@ def private_first10k_funnel():
                 FROM partner_applications
               )
               SELECT l.source,
-                count(*)::int AS applications,
-                count(*) FILTER (WHERE l.interested)::int AS coupon_requests,
-                count(*) FILTER (WHERE l.status='approved')::int AS approved_applications,
-                count(*) FILTER (WHERE l.interested AND l.status='approved')::int AS approved_coupon_interest,
+                count(DISTINCT l.id)::int AS applications,
+                count(DISTINCT l.id) FILTER (WHERE l.interested)::int AS coupon_requests,
+                count(DISTINCT l.id) FILTER (WHERE l.status='approved')::int AS approved_applications,
+                count(DISTINCT l.id) FILTER (WHERE l.interested AND l.status='approved')::int AS approved_coupon_interest,
                 count(DISTINCT p.id)::int AS issued_coupons
               FROM leads l
               LEFT JOIN promo_fee_coupons p ON p.application_id=l.id AND p.campaign='FIRST10K'
               GROUP BY l.source
-              ORDER BY count(*) DESC,l.source ASC LIMIT 100
+              ORDER BY count(DISTINCT l.id) DESC,l.source ASC LIMIT 100
             """).fetchall()
+            app_counts=conn.execute("""
+              SELECT count(*)::int AS applications,
+                count(*) FILTER (WHERE summary LIKE '[FIRST10K coupon request]%')::int AS coupon_requests,
+                count(*) FILTER (WHERE status='approved')::int AS approved_applications
+              FROM partner_applications
+            """).fetchone()
             issued=conn.execute("""
               SELECT count(*)::int AS coupon_count,
                      COALESCE(sum(discount_won) FILTER (WHERE currency='USD'),0)::bigint AS waived_usd_minor
@@ -229,9 +235,9 @@ def private_first10k_funnel():
               )
             """).fetchone()
         totals={
-          "applications":sum(int(v["applications"]) for v in sources),
-          "coupon_requests":sum(int(v["coupon_requests"]) for v in sources),
-          "approved_applications":sum(int(v["approved_applications"]) for v in sources),
+          "applications":int(app_counts["applications"]),
+          "coupon_requests":int(app_counts["coupon_requests"]),
+          "approved_applications":int(app_counts["approved_applications"]),
           "issued_coupons":int(issued["coupon_count"]),
           "waived_usd_minor":int(issued["waived_usd_minor"]),
           "completed_coupon_deals":int(completed["completed_coupon_deals"]),
