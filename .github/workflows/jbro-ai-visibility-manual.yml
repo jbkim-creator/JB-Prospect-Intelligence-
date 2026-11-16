@@ -1,0 +1,65 @@
+name: JBRO AI Visibility safe pilot
+on:
+  workflow_dispatch:
+    inputs:
+      approve_paid_calls:
+        description: "Authorize a small billed API pilot (requires OPENAI_API_KEY secret)"
+        type: boolean
+        required: true
+        default: false
+      max_calls:
+        description: "Maximum Responses API requests"
+        type: choice
+        required: true
+        options:
+          - "1"
+          - "3"
+        default: "1"
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out isolated AI Visibility feature
+        uses: actions/checkout@v4
+        with:
+          ref: feature/ai-visibility-mvp
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run all offline tests
+        working-directory: ai-visibility
+        run: python3 -m unittest discover -s tools/tests -v
+      - name: Confirm dry-run prompts (no API calls)
+        if: ${{ !inputs.approve_paid_calls }}
+        working-directory: ai-visibility
+        run: python3 tools/collect_openai_web_search.py --max-calls ${{ inputs.max_calls }}
+      - name: Check secret is configured before paid call
+        if: ${{ inputs.approve_paid_calls }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret missing. No paid call attempted."
+            exit 1
+          fi
+      - name: Execute explicitly approved paid pilot
+        if: ${{ inputs.approve_paid_calls }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        working-directory: ai-visibility
+        run: |
+          python3 tools/collect_openai_web_search.py --execute --confirm-paid-calls YES --max-calls ${{ inputs.max_calls }} --output evidence-openai.json
+          python3 tools/validate_evidence.py evidence-openai.json
+      - name: Upload evidence for limited retrieval
+        if: ${{ inputs.approve_paid_calls && success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-visibility-evidence
+          path: ai-visibility/evidence-openai.json
+          retention-days: 1
+          if-no-files-found: error
