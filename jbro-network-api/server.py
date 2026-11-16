@@ -100,7 +100,7 @@ def intake():
     role=str(data.get("role","")).strip()
     summary=str(data.get("summary","")).strip()
     consent=data.get("consent") is True
-    if not (1<=len(org)<=120 and 1<=len(country)<=80 and 10<=len(summary)<=650 and role in ROLES and consent and re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email) and len(email)<=160):
+    if not (1<=len(org)<=120 and len(country)<=80 and 10<=len(summary)<=650 and role in ROLES and consent and re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email) and len(email)<=160):
         return jsonify(error="invalid_fields"),400
     ip=request.headers.get("X-Forwarded-For",request.remote_addr or "").split(",")[0].strip()
     key=hashlib.sha256(ip.encode()).hexdigest()[:20]
