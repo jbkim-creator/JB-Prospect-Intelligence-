@@ -68,7 +68,7 @@ function render(){
    card.append(ops);cards.append(card);
  }
 }
-async function refresh(){const [data,opps,missions,claims,rewards]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);}
+async function refresh(){const [data,opps,missions,claims,rewards,sales]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);}
 function renderOpportunities(items){
  const root=$('opportunity-cards');root.replaceChildren();
  $('opportunity-message').textContent=items.length+' opportunity submissions';
@@ -224,6 +224,39 @@ async function loadContracts(dealId){
  }
 }
 $('contract-lookup').addEventListener('submit',async e=>{e.preventDefault();try{await loadContracts(Number($('contract-deal-id').value))}catch(err){$('contract-admin-status').textContent=err.message}});
+function renderSales(rooms){
+ const root=$('sale-admin-rooms'),msg=$('sale-admin-status');root.replaceChildren();
+ if(!rooms.length){root.append(make('div','empty','No buyer–seller deals created yet.'));return}
+ for(const room of rooms){
+  const c=make('article','application'),doc=room.contract;
+  c.append(make('h2','',room.title),make('div','id','Deal Room '+room.id+' · '+room.status+' · linked Reward Deal '+(room.reward_deal_id||'none')));
+  if(doc){
+   c.append(make('p','', 'SHA-256: '+doc.document_sha256));
+   c.append(make('div','details','Buyer signed: '+doc.signatures.some(x=>x.role==='buyer')+' · Seller signed: '+doc.signatures.some(x=>x.role==='seller')));
+   const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f8f5;padding:14px;border-radius:8px;font-size:12px';
+   pre.textContent=JSON.stringify(JSON.parse(doc.terms_json),null,2);c.append(pre);
+  }
+  if(room.status==='draft'){
+   const btn=make('button','','Issue sale agreement to buyer and seller');btn.type='button';
+   btn.addEventListener('click',async()=>{
+    if(!confirm('Confirm counsel reviewed complete sale terms, counterparty identities, signatories, and applicable trade compliance?'))return;
+    btn.disabled=true;
+    try{await api('/api/admin/deal-rooms/'+room.id+'/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_sale_terms_legal_review:true})});msg.textContent='Agreement issued to both approved counterparties.';await refresh();}
+    catch(err){msg.textContent='Not issued: '+err.message}finally{btn.disabled=false}
+   });c.append(btn);
+  }
+  root.append(c);
+ }
+}
+$('sale-create').addEventListener('submit',async e=>{
+ e.preventDefault();const form=$('sale-create');if(!form.reportValidity())return;
+ const btn=form.querySelector('button[type=submit]');btn.disabled=true;const obj=Object.fromEntries(new FormData(form));
+ const terms={};for(const key of ['buyer_legal_name','seller_legal_name','item_description','quantity_unit','delivery_terms','inspection_terms','payment_terms','governing_law','dispute_resolution','additional_terms'])terms[key]=(obj[key]||'').trim();
+ terms.total_contract_value_won=Number(obj.total_contract_value_won);
+ const payload={title:obj.title.trim(),buyer_application_id:Number(obj.buyer_application_id),seller_application_id:Number(obj.seller_application_id),reward_deal_id:obj.reward_deal_id?Number(obj.reward_deal_id):null,terms};
+ try{const r=await api('/api/admin/deal-rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});$('sale-admin-status').textContent='Private Deal Room '+r.room_id+' created in draft. Issue explicitly after review.';form.reset();await refresh();}
+ catch(err){$('sale-admin-status').textContent='Create failed: '+err.message}finally{btn.disabled=false}
+});
 $('reward-create').addEventListener('submit',async e=>{
  e.preventDefault();const b=$('reward-create').querySelector('button[type=submit]');b.disabled=true;
  try{await api('/api/admin/rewards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('reward-title').value.trim(),deal_value_won:Number($('reward-value').value),reward_share_pct:Number($('reward-share').value)})});$('reward-create').reset();$('reward-message').textContent='Draft created; does not establish a contractual obligation.';await refresh();}
