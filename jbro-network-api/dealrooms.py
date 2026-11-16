@@ -254,3 +254,148 @@ def room_status(room_id):
             return jsonify(room=data)
     except Exception:
         return error("temporarily_unavailable",503)
+
+
+def smoke_test(app, admin_secret, origin):
+    """Real Neon smoke test with three synthetic parties. All test rows removed."""
+    import secrets
+    nonce=secrets.token_hex(7)
+    client=app.test_client()
+    auth={"Authorization":"Bearer "+admin_secret}
+    aids=[];tokens=[];room_id=None;reward_id=None
+    try:
+        for idx in range(3):
+            registration=client.post("/api/partner-applications",json={
+                "organization":"JBRO_SALE_QA_"+nonce+"_"+str(idx),
+                "email":"sale-"+nonce+"-"+str(idx)+"@example.invalid",
+                "country":"Test","role":"Buyer" if idx==0 else "Supplier",
+                "summary":"Synthetic QA entity, not a genuine counterparty.",
+                "consent":True
+            },headers={"Origin":origin})
+            assert registration.status_code==201,("register",registration.status_code)
+            aid=int(registration.get_json()["reference"].split("-")[-1]);aids.append(aid)
+            approved=client.patch("/api/admin/applications/"+str(aid),headers=auth,json={"status":"approved"})
+            assert approved.status_code==200,("approved",approved.status_code)
+            invite=client.post("/api/admin/applications/"+str(aid)+"/issue-access",headers=auth)
+            assert invite.status_code==200,("token issue",invite.status_code)
+            tokens.append(invite.get_json()["access_token"])
+        reward=client.post("/api/admin/rewards",headers=auth,json={
+            "title":"QA buyer seller reward deal "+nonce,"deal_value_won":100000000,"reward_share_pct":30})
+        assert reward.status_code==201,("reward draft",reward.status_code)
+        reward_id=reward.get_json()["deal_id"]
+        for idx in range(2):
+            rr=client.post("/api/admin/rewards/"+str(reward_id)+"/contributors",headers=auth,json={
+                "application_id":aids[idx],"role":"buyer_introduction" if idx==0 else "supplier_introduction",
+                "allocation_pct":50,"agreement_reference":"QA-CONT-"+nonce+"-"+str(idx)})
+            assert rr.status_code==201,("reward contributor",rr.status_code)
+        terms={
+          "buyer_legal_name":"Synthetic Buyer Corporation",
+          "seller_legal_name":"Synthetic Seller Corporation",
+          "item_description":"Synthetic test-only industrial computing boards; this is not a real sale.",
+          "quantity_unit":"100 pieces",
+          "total_contract_value_won":100000000,
+          "delivery_terms":"DAP test warehouse in Republic of Korea, no real shipment.",
+          "inspection_terms":"Test specification and inspection only; no real inspection.",
+          "payment_terms":"Test-only payment description; no actual funds are exchanged.",
+          "governing_law":"Republic of Korea",
+          "dispute_resolution":"Synthetic arbitration clause for QA only, no real agreement.",
+          "additional_terms":"Nonbinding controlled test, not a genuine order."
+        }
+        created=client.post("/api/admin/deal-rooms",headers=auth,json={
+            "title":"QA synthetic sale room "+nonce,
+            "buyer_application_id":aids[0],"seller_application_id":aids[1],
+            "reward_deal_id":reward_id,"terms":terms})
+        assert created.status_code==201,("sale create",created.status_code)
+        room_id=created.get_json()["room_id"]
+        linked=client.get("/api/admin/deal-rooms/"+str(room_id)+"/status",headers=auth)
+        assert linked.status_code==200 and linked.get_json()["room"]["reward_deal_id"]==reward_id
+        issued=client.post("/api/admin/rewards/"+str(reward_id)+"/contracts/issue",headers=auth,
+                           json={"confirm_legal_terms_reviewed":True})
+        assert issued.status_code==201,("fee docs issued",issued.status_code)
+        rdocs=client.get("/api/admin/rewards/"+str(reward_id)+"/contracts",headers=auth).get_json()["contracts"]
+        assert len(rdocs)==2
+        for i,doc in enumerate(rdocs):
+            who=next(j for j,aid in enumerate(aids[:2]) if aid==doc["application_id"])
+            sign=client.post("/api/partner/contracts/"+str(doc["id"])+"/accept",
+                 headers={"Authorization":"Bearer "+tokens[who]},
+                 json={"representative":"Synthetic Director","document_sha256":doc["agreement_sha256"],
+                       "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+            assert sign.status_code==200,("reward partner assent",sign.status_code)
+            sign=client.post("/api/admin/contracts/"+str(doc["id"])+"/countersign",headers=auth,
+                 json={"representative":"Synthetic JBRO Signer","document_sha256":doc["agreement_sha256"],
+                       "confirm_company_authority":True,"confirm_read_and_accept":True})
+            assert sign.status_code==200,("reward countersign",sign.status_code)
+        premature=client.post("/api/admin/rewards/"+str(reward_id)+"/contracts/finalize",headers=auth,
+             json={"confirm_all_party_authority_checked":True})
+        assert premature.status_code==409,("reward deal finalized before sale",premature.status_code)
+        draft_hidden=client.get("/api/partner/deal-rooms",headers={"Authorization":"Bearer "+tokens[0]})
+        assert draft_hidden.status_code==200 and not draft_hidden.get_json()["rooms"]
+        issue=client.post("/api/admin/deal-rooms/"+str(room_id)+"/issue",headers=auth,
+             json={"confirm_sale_terms_legal_review":True})
+        assert issue.status_code==200,("sale issue",issue.status_code)
+        unauthorized=client.get("/api/partner/deal-rooms")
+        assert unauthorized.status_code==401
+        other=client.get("/api/partner/deal-rooms",headers={"Authorization":"Bearer "+tokens[2]})
+        assert other.status_code==200 and not other.get_json()["rooms"],"cross-partner visibility"
+        first=client.get("/api/partner/deal-rooms",headers={"Authorization":"Bearer "+tokens[0]})
+        assert first.status_code==200 and len(first.get_json()["rooms"])==1
+        doc=first.get_json()["rooms"][0]["contract"]
+        assert hashlib.sha256(doc["terms_json"].encode()).hexdigest()==doc["document_sha256"]
+        third_sig=client.post("/api/partner/deal-rooms/"+str(room_id)+"/accept",
+              headers={"Authorization":"Bearer "+tokens[2]},
+              json={"representative":"Unauthorized third","document_sha256":doc["document_sha256"],
+                    "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+        assert third_sig.status_code==404,"unauthorized third party accepted"
+        changed=client.post("/api/partner/deal-rooms/"+str(room_id)+"/accept",
+              headers={"Authorization":"Bearer "+tokens[0]},
+              json={"representative":"Buyer Director","document_sha256":"0"*64,
+                    "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+        assert changed.status_code==409,"changed hash accepted"
+        for idx in range(2):
+            sign=client.post("/api/partner/deal-rooms/"+str(room_id)+"/accept",
+                  headers={"Authorization":"Bearer "+tokens[idx]},
+                  json={"representative":"Synthetic Authorized Signer",
+                        "document_sha256":doc["document_sha256"],
+                        "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+            assert sign.status_code==200,("sale assent",sign.status_code)
+        assert sign.get_json()["status"]=="signed","both party signatures incomplete"
+        repeated=client.post("/api/partner/deal-rooms/"+str(room_id)+"/accept",
+                  headers={"Authorization":"Bearer "+tokens[0]},
+                  json={"representative":"Duplicate Buyer","document_sha256":doc["document_sha256"],
+                  "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+        assert repeated.status_code==404,"accepted after signed"
+        finalized=client.post("/api/admin/rewards/"+str(reward_id)+"/contracts/finalize",headers=auth,
+                       json={"confirm_all_party_authority_checked":True})
+        assert finalized.status_code==200,("linked fee finalize",finalized.status_code)
+        assert client.post("/api/admin/rewards/"+str(reward_id)+"/approve-settlements",headers=auth,
+                 json={"confirm_compliance_review":True}).status_code==409,"approved without fee receipt"
+        log.info("JBRO_DEALROOM_SMOKE_PASS")
+    finally:
+        with DB() as conn:
+            with conn.cursor() as cur:
+                if room_id is not None:
+                    rr=cur.execute("SELECT id FROM deal_rooms WHERE id=%s AND title=%s",
+                              (room_id,"QA synthetic sale room "+nonce)).fetchone()
+                    if rr:
+                        cur.execute("DELETE FROM deal_sale_assents WHERE contract_id IN (SELECT id FROM deal_sale_contracts WHERE room_id=%s)",(room_id,))
+                        cur.execute("DELETE FROM deal_sale_contracts WHERE room_id=%s",(room_id,))
+                        cur.execute("DELETE FROM deal_room_audit WHERE room_id=%s",(room_id,))
+                        cur.execute("DELETE FROM deal_rooms WHERE id=%s",(room_id,))
+                if reward_id is not None:
+                    rr=cur.execute("SELECT id FROM reward_deals WHERE id=%s AND title=%s",
+                        (reward_id,"QA buyer seller reward deal "+nonce)).fetchone()
+                    if rr:
+                        cur.execute("DELETE FROM reward_contract_assents WHERE contract_id IN (SELECT id FROM reward_contracts WHERE deal_id=%s)",(reward_id,))
+                        cur.execute("DELETE FROM reward_contracts WHERE deal_id=%s",(reward_id,))
+                        cur.execute("DELETE FROM reward_audit WHERE deal_id=%s",(reward_id,))
+                        cur.execute("DELETE FROM reward_settlements WHERE contributor_id IN (SELECT id FROM reward_contributors WHERE deal_id=%s)",(reward_id,))
+                        cur.execute("DELETE FROM reward_receipts WHERE deal_id=%s",(reward_id,))
+                        cur.execute("DELETE FROM reward_contributors WHERE deal_id=%s",(reward_id,))
+                        cur.execute("DELETE FROM reward_deals WHERE id=%s",(reward_id,))
+                for aid in aids:
+                    rr=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND organization LIKE %s",
+                              (aid,"JBRO_SALE_QA_"+nonce+"_%")).fetchone()
+                    if rr:
+                        cur.execute("DELETE FROM partner_access WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
