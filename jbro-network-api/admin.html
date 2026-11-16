@@ -13,6 +13,25 @@
 <p>Participation/reward agreements are separate from buyer-seller sales contracts. Every approved participant must accept their own frozen terms, and JBRO must countersign. Confirm company identity, representative authority, commercial terms and governing law before relying on an agreement.</p>
 <form id="contract-lookup"><label for="contract-deal-id">Reward deal ID</label><input id="contract-deal-id" type="number" min="1" required><button type="submit">Load contract documents</button></form>
 <p id="contract-admin-status" role="status"></p><div id="contract-admin-list" class="cards"></div>
+</div><div class="panel" style="margin-top:25px"><h2>Buyer–Seller Deal Rooms</h2><p>Create a private KRW-denominated sale agreement between two approved partner organizations. Each party must explicitly accept the same document. Only link a Reward Deal while both contracts are still in draft.</p>
+<form id="sale-create">
+<label>Internal deal title</label><input name="title" maxlength="160" minlength="8" required>
+<label>Buyer approved application ID</label><input name="buyer_application_id" type="number" min="1" required>
+<label>Seller approved application ID</label><input name="seller_application_id" type="number" min="1" required>
+<label>Optional linked JBRO Reward Deal ID</label><input name="reward_deal_id" type="number" min="1" placeholder="Leave empty if unlinked">
+<label>Buyer's registered legal name</label><input name="buyer_legal_name" required minlength="3" maxlength="160">
+<label>Seller's registered legal name</label><input name="seller_legal_name" required minlength="3" maxlength="160">
+<label>Products / specifications</label><textarea name="item_description" required minlength="10" maxlength="1400"></textarea>
+<label>Quantity and unit</label><input name="quantity_unit" required minlength="2" maxlength="100">
+<label>Total contract value (KRW)</label><input name="total_contract_value_won" type="number" min="1" required>
+<label>Delivery terms / destination / Incoterms where applicable</label><textarea name="delivery_terms" required minlength="8" maxlength="500"></textarea>
+<label>Inspection / acceptance terms</label><textarea name="inspection_terms" required minlength="8" maxlength="500"></textarea>
+<label>Payment terms</label><textarea name="payment_terms" required minlength="8" maxlength="500"></textarea>
+<label>Governing law</label><input name="governing_law" required minlength="3" maxlength="180">
+<label>Dispute resolution</label><textarea name="dispute_resolution" required minlength="8" maxlength="500"></textarea>
+<label>Additional terms</label><textarea name="additional_terms" maxlength="1400"></textarea>
+<button type="submit">Create private sale agreement draft</button></form>
+<p id="sale-admin-status" role="status"></p><div id="sale-admin-rooms" class="cards"></div>
 </div><div id="issued-key-panel" class="panel" hidden style="margin-top:25px"><h2>One-time partner access key</h2><p>Copy this key and deliver it to the approved partner through a secure channel. It will not be shown again. Issuing a new key immediately invalidates their prior key.</p><label for="issued-key">Partner access key</label><textarea id="issued-key" rows="3" readonly style="width:100%;overflow-wrap:anywhere"></textarea><p><a href="https://jbro-network-api.onrender.com/partner" target="_blank" rel="noopener noreferrer">Partner workspace</a></p><button type="button" id="clear-issued-key" class="quiet">Clear key from screen</button></div>
 </section></main>
 <footer>Private data. Do not share screenshots, access keys or applicant details outside authorized JBRO operations.</footer><script src="/admin.js" defer></script></body></html>
