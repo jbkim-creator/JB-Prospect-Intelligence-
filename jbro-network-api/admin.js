@@ -68,7 +68,30 @@ function render(){
    card.append(ops);cards.append(card);
  }
 }
-async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);}
+async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);}
+function renderFirst10kFunnel(data){
+ const totals=$('coupon-funnel-totals');totals.replaceChildren();
+ const t=data.totals||{};
+ const usd=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n||0)/100);
+ const fields=[
+  ['Applications',t.applications||0],['Coupon requests',t.coupon_requests||0],
+  ['Approved partners',t.approved_applications||0],['Coupons issued',t.issued_coupons||0],
+  ['Completed coupon-linked orders',t.completed_coupon_deals||0],
+  ['Completed coupon-linked GMV',usd(t.completed_coupon_gmv_usd_minor)],
+  ['Recorded fee discount',usd(t.waived_usd_minor)]
+ ];
+ for(const [label,value] of fields){
+  const c=make('div');c.append(make('strong','',String(value)),make('span','',label));totals.append(c);
+ }
+ const sources=$('coupon-funnel-sources');sources.replaceChildren();
+ if(!(data.sources||[]).length){sources.append(make('div','empty','No submitted applications yet. No visitor analytics are collected.'));return;}
+ for(const x of data.sources){
+  const c=make('article','application');
+  c.append(make('h3','',x.source),make('div','details',
+   'Applications: '+x.applications+' · Coupon requests: '+x.coupon_requests+' · Approved: '+x.approved_applications+' · Coupons issued: '+x.issued_coupons));
+  sources.append(c);
+ }
+}
 function renderGMVKpis(data){
  const root=$('gmv-kpis');root.replaceChildren();
  const fmt=(v,cur)=>new Intl.NumberFormat('en-US',{style:'currency',currency:cur,maximumFractionDigits:cur==='KRW'?0:2}).format(Number(v)/(cur==='USD'?100:1));
