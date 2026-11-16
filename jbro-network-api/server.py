@@ -6,7 +6,7 @@ import hmac
 import hashlib
 import logging
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, send_from_directory
 from psycopg import connect
 from psycopg.rows import dict_row
 
@@ -56,13 +56,25 @@ def headers(response):
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    response.headers["Content-Security-Policy"] = ("default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; connect-src 'self'" if request.path in ("/admin", "/admin.js", "/admin.css") else "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
     if request.headers.get("Origin") == ALLOWED_ORIGIN:
         response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Vary"] = "Origin"
     return response
+
+@app.get("/admin")
+def admin_console():
+    return send_from_directory(os.path.dirname(__file__), "admin.html")
+
+@app.get("/admin.js")
+def admin_script():
+    return send_from_directory(os.path.dirname(__file__), "admin.js", mimetype="application/javascript")
+
+@app.get("/admin.css")
+def admin_style():
+    return send_from_directory(os.path.dirname(__file__), "admin.css", mimetype="text/css")
 
 @app.get("/healthz")
 def health():
