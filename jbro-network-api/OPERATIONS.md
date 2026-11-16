@@ -1,3 +1,24 @@
+## Contract export and post-sign Deal Room execution tracking — 2026-11-16
+
+Code `jbro-network-api/execution.py`, integrated into existing Flask API. New database `deal_execution_events` tracks per-deal, per-partner progress evidence for stages `inspection`, `shipment`, `delivery` and `payment`, each submitted as a claim requiring independent administrator review. A partner submission does **not** certify that goods shipped, inspection passed, or money arrived. Only explicitly reviewed records can be marked `verified` or `rejected`, and repeat reviews are refused. Each partner has a maximum of 20 evidence submissions per deal per 24 hours.
+
+Authenticated, permission-scoped contract record export endpoints:
+- `GET /api/admin/deal-rooms/<room_id>/contract-export`
+- `GET /api/partner/deal-rooms/<room_id>/contract-export`
+
+Both return a JSON evidence record with the immutable contract text, SHA-256 document fingerprint, version, timestamped assent data and derived SHA-256 export fingerprint. Browser UI downloads this response as `JBRO-Deal-<id>-contract-record.json`. Download is available to JBRO administrators and only the specific buyer or seller, not any other partner. No bearer token is embedded in the export; records have `Cache-Control: no-store`. This is NOT a digitally signed PDF or qualified signature certificate and does not independently authenticate signing authority.
+
+Signed-deal execution evidence:
+- `GET /api/admin/deal-rooms/<room_id>/execution` and `GET /api/partner/deal-rooms/<room_id>/execution` (partner sees only its assigned deal)
+- `POST /api/partner/deal-rooms/<room_id>/execution` submits a non-confidential evidence reference plus description, requires signed buyer/seller sale contract
+- `PATCH /api/admin/deal-rooms/<room_id>/execution/<event_id>` verifies/rejects a submission only following affirmative admin review.
+
+Live Neon-backed smoke test `JBRO_EXECUTION_SMOKE_PASS` passed: draft blocks evidence, restricted authenticated contract export, third-party access denied, doc/export SHA hashes verified, bilateral consent, submission remains unverified pending review, verification control and duplicate review prevention. Synthetic records fully removed; Neon DB confirmed zero Deal Rooms, sale signatures, evidence records, synthetic partner accounts. `JBRO_EXECUTION_SMOKE_TEST` restored to `0` via Render environment redeploy.
+
+**Limits before live commercial use:** evidence references are unverified user assertions until an administrator reviews the underlying documents. The application does not access bank statements, courier systems, carrier APIs or escrow funds. It does not store scanned proof files or create an electronic signature with independently validated real-world identity. Add secure file attachments, stronger login/MFA, credential rotation, durable audit retention, independent bank confirmations, and legal approval before using this workflow to certify a high-value transaction. Signed contracts are still immutable version 1; amendments need a new revision/supersession feature.
+
+---
+
 ## Buyer–Seller Deal Rooms — 2026-11-16
 
 - Code `jbro-network-api/dealrooms.py`. Administrator creates private KRW sale terms identifying two approved buyer/seller partner applications; one optional linked draft `reward_deals` record must have the same total deal value.
