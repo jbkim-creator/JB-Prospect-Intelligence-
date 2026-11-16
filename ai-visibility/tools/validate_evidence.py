@@ -45,7 +45,8 @@ def validate(doc):
             if not isinstance(statuses, list) or 'completed' not in statuses:
                 errors.append(f'{at}: no completed web-search call evidence')
             if item.get('recommended') != 'unreviewed':
-                errors.append(f'{at}: automated recommendation judgment must start unreviewed')
+                if not isinstance(item.get('reviewer_name'), str) or not item['reviewer_name'].strip() or not isinstance(item.get('reviewed_at'), str) or not item['reviewed_at'].strip():
+                    errors.append(f'{at}: reviewed API verdict requires reviewer_name and reviewed_at')
     return errors
 
 def main():
