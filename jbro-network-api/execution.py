@@ -184,3 +184,109 @@ def review_evidence(room_id,event_id):
         return jsonify(event_id=event_id,status=status),200
     except Exception:
         log.exception("Execution review failed");return fail("temporarily_unavailable",503)
+
+
+def smoke_test(app, admin_token, origin):
+    """Real Neon E2E: bilateral sale sign -> private export -> evidence -> review -> cleanup."""
+    import secrets
+    nonce=secrets.token_hex(7)
+    client=app.test_client()
+    admin={"Authorization":"Bearer "+admin_token}
+    aids=[];tokens=[];room_id=None
+    try:
+        for i in range(3):
+            r=client.post("/api/partner-applications",json={
+              "organization":"JBRO_EXECUTION_QA_"+nonce+"_"+str(i),
+              "email":"execution-"+nonce+"-"+str(i)+"@example.invalid",
+              "country":"Test","role":"Buyer" if i==0 else "Supplier",
+              "summary":"Synthetic test-only execution participant, not a real entity.","consent":True
+            },headers={"Origin":origin})
+            assert r.status_code==201,("intake",r.status_code)
+            aid=int(r.get_json()["reference"].split("-")[-1]);aids.append(aid)
+            assert client.patch("/api/admin/applications/"+str(aid),headers=admin,json={"status":"approved"}).status_code==200
+            invite=client.post("/api/admin/applications/"+str(aid)+"/issue-access",headers=admin)
+            assert invite.status_code==200
+            tokens.append(invite.get_json()["access_token"])
+        terms={
+          "buyer_legal_name":"Synthetic Buyer Incorporated",
+          "seller_legal_name":"Synthetic Supplier Incorporated",
+          "item_description":"Synthetic verification-only computing devices, not a genuine commercial offer.",
+          "quantity_unit":"12 units",
+          "total_contract_value_won":100000000,
+          "delivery_terms":"DAP test-only warehouse in South Korea; no physical shipping.",
+          "inspection_terms":"Test-only inspection; no goods are checked in real life.",
+          "payment_terms":"Test-only payment terms; no money is transferred by this test.",
+          "governing_law":"Republic of Korea",
+          "dispute_resolution":"Synthetic pilot arbitration clause, not a binding instruction.",
+          "additional_terms":"This record is synthetic and not a real buyer or seller agreement."
+        }
+        r=client.post("/api/admin/deal-rooms",headers=admin,json={
+           "title":"JBRO evidence smoke test "+nonce,"buyer_application_id":aids[0],
+           "seller_application_id":aids[1],"terms":terms})
+        assert r.status_code==201,("room create",r.status_code)
+        room_id=r.get_json()["room_id"]
+        header0={"Authorization":"Bearer "+tokens[0]}
+        header1={"Authorization":"Bearer "+tokens[1]}
+        header2={"Authorization":"Bearer "+tokens[2]}
+        premature=client.post("/api/partner/deal-rooms/"+str(room_id)+"/execution",
+            headers=header0,json={"stage":"inspection","evidence_reference":"QA-REPORT-"+nonce,
+               "note":"Test data only: no actual inspection was completed.","confirm_accurate_and_authorized":True})
+        assert premature.status_code==409,"draft allowed evidence submission"
+        assert client.post("/api/admin/deal-rooms/"+str(room_id)+"/issue",
+              headers=admin,json={"confirm_sale_terms_legal_review":True}).status_code==200
+        export=client.get("/api/partner/deal-rooms/"+str(room_id)+"/contract-export",headers=header0)
+        assert export.status_code==200,("authorized download",export.status_code)
+        bundle=export.get_json()
+        assert hashlib.sha256(bundle["document_text"].encode()).hexdigest()==bundle["document_sha256"]
+        copy=dict(bundle);fingerprint=copy.pop("export_sha256")
+        assert hashlib.sha256(json.dumps(copy,sort_keys=True,ensure_ascii=False,
+            separators=(",",":")).encode()).hexdigest()==fingerprint
+        assert "attachment;" in export.headers.get("Content-Disposition","")
+        assert client.get("/api/partner/deal-rooms/"+str(room_id)+"/contract-export",headers=header2).status_code==404
+        doc_hash=bundle["document_sha256"]
+        for header in (header0,header1):
+            sign=client.post("/api/partner/deal-rooms/"+str(room_id)+"/accept",headers=header,
+                json={"representative":"Synthetic Authorized Officer",
+                 "document_sha256":doc_hash,"confirm_authorized_signatory":True,
+                 "confirm_read_and_accept":True})
+            assert sign.status_code==200,("assent",sign.status_code)
+        executed=client.post("/api/partner/deal-rooms/"+str(room_id)+"/execution",
+            headers=header1,json={"stage":"shipment","evidence_reference":"QA-SHIP-"+nonce,
+              "note":"Synthetic shipment evidence for automated integration test only.",
+              "confirm_accurate_and_authorized":True})
+        assert executed.status_code==201,("evidence",executed.status_code)
+        event_id=executed.get_json()["event_id"]
+        assert client.get("/api/partner/deal-rooms/"+str(room_id)+"/execution",headers=header2).status_code==404
+        first=client.get("/api/admin/deal-rooms/"+str(room_id)+"/execution",headers=admin)
+        assert first.status_code==200 and first.get_json()["events"][0]["status"]=="submitted"
+        wrong=client.patch("/api/admin/deal-rooms/"+str(room_id)+"/execution/"+str(event_id),
+            headers=admin,json={"status":"verified","confirm_reviewed_evidence":False})
+        assert wrong.status_code==400,"verified without explicit review"
+        accepted=client.patch("/api/admin/deal-rooms/"+str(room_id)+"/execution/"+str(event_id),
+            headers=admin,json={"status":"verified","confirm_reviewed_evidence":True})
+        assert accepted.status_code==200,("evidence review",accepted.status_code)
+        duplicate=client.patch("/api/admin/deal-rooms/"+str(room_id)+"/execution/"+str(event_id),
+            headers=admin,json={"status":"verified","confirm_reviewed_evidence":True})
+        assert duplicate.status_code==409,"duplicate review"
+        assert client.get("/api/admin/deal-rooms/"+str(room_id)+"/contract-export",headers=admin).status_code==200
+        assert client.get("/api/admin/deal-rooms/"+str(room_id)+"/contract-export").status_code==401
+        log.info("JBRO_EXECUTION_SMOKE_PASS")
+    finally:
+        with DB() as conn:
+            with conn.cursor() as cur:
+                if room_id:
+                    row=cur.execute("SELECT id FROM deal_rooms WHERE id=%s AND title=%s",
+                       (room_id,"JBRO evidence smoke test "+nonce)).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM deal_execution_events WHERE room_id=%s",(room_id,))
+                        cur.execute("DELETE FROM deal_sale_assents WHERE contract_id IN (SELECT id FROM deal_sale_contracts WHERE room_id=%s)",(room_id,))
+                        cur.execute("DELETE FROM deal_sale_contracts WHERE room_id=%s",(room_id,))
+                        cur.execute("DELETE FROM deal_room_audit WHERE room_id=%s",(room_id,))
+                        cur.execute("DELETE FROM deal_rooms WHERE id=%s",(room_id,))
+                for aid in aids:
+                    row=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND organization LIKE %s",
+                       (aid,"JBRO_EXECUTION_QA_"+nonce+"_%")).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM partner_access WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
