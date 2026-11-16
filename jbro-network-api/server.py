@@ -478,6 +478,8 @@ try:
         smoke_test()
     if os.getenv("JBRO_PARTNER_SMOKE_TEST") == "1":
         partner_smoke_test()
+    if os.getenv("JBRO_QUEST_SMOKE_TEST") == "1":
+        tradequest.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
 except Exception:
     app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
 
