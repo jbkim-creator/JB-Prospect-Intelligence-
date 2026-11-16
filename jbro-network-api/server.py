@@ -398,12 +398,81 @@ def smoke_test():
                     conn.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(test_id,))
                     conn.execute("DELETE FROM partner_applications WHERE id=%s AND organization=%s AND email=%s",(test_id,test_org,test_mail))
 
+
+def partner_smoke_test():
+    """Live DB end-to-end test: approval, scoped submission, isolation, revocation, cleanup."""
+    if not (DB_URL and ADMIN_TOKEN and len(ADMIN_TOKEN) >= 32):
+        raise RuntimeError("Partner smoke test requires DB and admin secret")
+    import uuid
+    nonce=uuid.uuid4().hex[:12]
+    a_ids=[]
+    opp_ids=[]
+    client=app.test_client()
+    admin_auth={"Authorization":"Bearer "+ADMIN_TOKEN}
+    keys=[]
+    try:
+        for index in (1,2):
+            res=client.post("/api/partner-applications",json={
+                "organization":"JBRO_PARTNER_TEST_"+nonce+"_"+str(index),
+                "email":"jbro-test-"+nonce+"-"+str(index)+"@example.invalid",
+                "country":"Test",
+                "role":"Supplier",
+                "summary":"Nonconfidential synthetic test applicant, no real customer.",
+                "consent":True
+            },headers={"Origin":ALLOWED_ORIGIN})
+            assert res.status_code==201, ("intake",res.status_code)
+            aid=int(res.get_json()["reference"].split("-")[-1])
+            a_ids.append(aid)
+            update=client.patch("/api/admin/applications/"+str(aid),headers=admin_auth,json={"status":"approved"})
+            assert update.status_code==200,("approve",update.status_code)
+            issue=client.post("/api/admin/applications/"+str(aid)+"/issue-access",headers=admin_auth)
+            assert issue.status_code==200,("issue",issue.status_code)
+            keys.append(issue.get_json()["access_token"])
+        for index in (0,1):
+            r=client.post("/api/partner/opportunities",headers={"Authorization":"Bearer "+keys[index]},json={
+                "category":"buy_requirement","title":"Synthetic purchase requirement "+str(index),
+                "summary":"Test-only 100 widgets for qualification; not a genuine buying requirement.",
+                "country":"Test","confirm_nonconfidential":True
+            })
+            assert r.status_code==201,("submission",r.status_code)
+            opp_ids.append(int(r.get_json()["reference"].split("-")[-1]))
+        for index in (0,1):
+            res=client.get("/api/partner/opportunities",headers={"Authorization":"Bearer "+keys[index]})
+            assert res.status_code==200,("listing",res.status_code)
+            got={x["id"] for x in res.get_json()["opportunities"]}
+            assert opp_ids[index] in got and opp_ids[1-index] not in got,("isolation",index)
+        all_opps=client.get("/api/admin/opportunities",headers=admin_auth)
+        assert all_opps.status_code==200 and all(x in {o["id"] for o in all_opps.get_json()["opportunities"]} for x in opp_ids)
+        review=client.patch("/api/admin/opportunities/"+str(opp_ids[0]),headers=admin_auth,json={"status":"reviewing"})
+        assert review.status_code==200,("review",review.status_code)
+        revoke=client.post("/api/admin/applications/"+str(a_ids[0])+"/revoke-access",headers=admin_auth)
+        assert revoke.status_code==200 and revoke.get_json()["revoked"],"revoke failed"
+        denied=client.get("/api/partner/me",headers={"Authorization":"Bearer "+keys[0]})
+        assert denied.status_code==401,("revoked key",denied.status_code)
+        unauthorized=client.get("/api/admin/opportunities")
+        assert unauthorized.status_code==401
+        app.logger.info("JBRO_PARTNER_ISOLATION_SMOKE_PASS")
+    finally:
+        # Clean up only test-owned records identified by unique nonce; real records are untouched.
+        with connection() as conn:
+            with conn.cursor() as cur:
+                for aid in a_ids:
+                    row=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND organization LIKE %s",(aid,"JBRO_PARTNER_TEST_"+nonce+"_%")).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_opportunity' AND entity_id IN (SELECT id FROM partner_opportunities WHERE application_id=%s)",(aid,))
+                        cur.execute("DELETE FROM partner_opportunities WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_access WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
+
 # Check real database connectivity once per worker startup. No secrets or records in logs.
 try:
     setup_db()
     app.logger.info("JBRO_NEON_DB_STARTUP_READY")
     if os.getenv("JBRO_SMOKE_TEST") == "1":
         smoke_test()
+    if os.getenv("JBRO_PARTNER_SMOKE_TEST") == "1":
+        partner_smoke_test()
 except Exception:
     app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
 
