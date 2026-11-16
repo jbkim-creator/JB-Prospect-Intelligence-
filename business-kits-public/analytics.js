@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    if(a.href.startsWith('mailto:')) return;
    try {
     const dest=new URL(a.href,location.href);
-    if(dest.origin!==location.origin || !/\\.html$/.test(dest.pathname))return;
+    if(dest.origin!==location.origin || !/\.html$/.test(dest.pathname))return;
     ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(k=>{
      const v=params.get(k);
      if(v && !dest.searchParams.has(k))dest.searchParams.set(k,v);
