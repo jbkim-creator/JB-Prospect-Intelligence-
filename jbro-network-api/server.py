@@ -488,6 +488,8 @@ try:
         tradequest.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
     if os.getenv("JBRO_REWARD_SMOKE_TEST") == "1":
         rewards.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
+    if os.getenv("JBRO_CONTRACT_SMOKE_TEST") == "1":
+        contracts.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
 except Exception:
     app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
 
