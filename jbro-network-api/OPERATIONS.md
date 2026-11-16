@@ -1,3 +1,22 @@
+## In-platform participation/reward agreements — 2026-11-16
+
+Implemented `jbro-network-api/contracts.py`. Routes:
+- `POST /api/admin/rewards/<deal_id>/contracts/issue`: freeze one per-participant commission-sharing agreement after deal draft has all approved participants and 100% total allocation; requires administrator legal-review confirmation.
+- `GET /api/admin/rewards/<deal_id>/contracts`: private contract documents and bilateral assent status.
+- `GET /api/partner/contracts`: each approved invite-only partner sees only their own terms/document and its immutable SHA-256 fingerprint.
+- `POST /api/partner/contracts/<contract_id>/accept`: signed-in participant submits full representative name and explicit authorized-signatory and read-and-accept confirmations against the exact SHA-256 fingerprint. Cross-partner signatures, changed documents and repeat signatures are rejected.
+- `POST /api/admin/contracts/<contract_id>/countersign`: authenticated JBRO administrator separately accepts the same document hash.
+- `POST /api/admin/rewards/<deal_id>/contracts/finalize`: requires all participant-specific agreements fully countersigned and validated 100% allocations, then changes reward deal to `signed` with aggregate SHA-256 reference.
+- Legacy `POST /api/admin/rewards/<deal_id>/sign` always rejects unilateral admin agreement attestation.
+
+Neon: `reward_contracts` (frozen versioned agreement text, SHA-256) and `reward_contract_assents` (unique per-party consent, timestamp, representative, document hash, pseudonymized IP fingerprint, UA). Mutations of participant allocations are locked after documents have been issued. No automatic funds are transferred, and no customer purchase order/seller contract is represented here.
+
+Live Neon-backed smoke test confirmed `JBRO_PLATFORM_CONTRACT_SMOKE_PASS`: frozen hash integrity, unauthorized signer and wrong-hash rejection, duplicate assent prevention, all-party finalization and no settlement before bank receipts. The test used two fake partners, then deleted all test agreements, signatures, offers and fake partner identities. Test flag `JBRO_CONTRACT_SMOKE_TEST` switched back to `0` with new Render deployment.
+
+**Production limitations:** This is an authenticated online acceptance MVP, not a qualified digital-signature certificate, legal identity verification, PKI-backed nonrepudiation, or guaranteed enforceability of a contract. The current partner account key is a long-lived bearer token without MFA; operator identity and authorized signatory declarations are self-reported. Before legally binding commercial launch, replace with MFA identity provider/qualified e-sign vendor as necessary; verify the contracting entity's exact registration and jurisdiction and approved signatory identity; obtain legal review of governing law, taxes and data retention; implement signed document download/receipts, a stronger tamper-evident audit/log archive and a cancellation/amendment process. Participation contracts are distinct from actual buyer-seller sale/purchase agreements and counterparty purchase orders. 
+
+---
+
 ## Deal Rewards 2.5% — accounting MVP (2026-11-16)
 
 Purpose: share **a portion of the 2.5% fee actually received by JBRO on one agreed side of a trade**, not 2.5% of the entire deal as a participation reward.
