@@ -1,3 +1,13 @@
+## CURRENT PROVISIONAL BRAND — 2.5 Trade Network by JBRO (2026-11-16)
+
+- User-selected display name: **2.5 Trade Network by JBRO** in both English and Korean site headers; localized supporting copy remains language-specific.
+- Supersedes prior display-only candidate **JBRO 2.5 / 제이브로 2.5**. Keep legacy sections below solely as history.
+- Scope: public landing page title/header/hero/footer, partner title/header, admin title/header. Live deployment uses same Render URLs.
+- **No trademark clearance, new domain purchase, corporate entity rename, counterparty/contract change, USD/KRW price change, coupon eligibility change, data migration, or fee change.** The JBRO 2.5% commission and FIRST10K USD terms are independent of the marketing display name. Existing signatures and records continue identifying the existing legal parties.
+- Before formal launch with new domain and paid branding, investigate exact and confusingly similar marks in KR/US/UK/EU/HK, classes 35/42, domain RDAP and domain availability. A display-name trial is not a legal clearance statement.
+
+---
+
 ## Provisional service display name: JBRO 2.5 / 제이브로 2.5 (2026-11-16)
 
 - Status: **PROVISIONAL brand display only**, **not trademark-cleared or registered**. Name approved operationally for trial on existing onrender.com addresses; no new domain purchase or trademark assertion.
