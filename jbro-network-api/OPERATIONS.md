@@ -1,3 +1,15 @@
+## Provisional service display name: JBRO 2.5 / 제이브로 2.5 (2026-11-16)
+
+- Status: **PROVISIONAL brand display only**, **not trademark-cleared or registered**. Name approved operationally for trial on existing onrender.com addresses; no new domain purchase or trademark assertion.
+- Branding scope: homepage header, public title, partner header/title and private administration header/title. English `JBRO 2.5`, Korean `제이브로 2.5`. FIRST10K campaign stays USD first US$10,000 of eligible trade value, maximum waived 2.5% fee US$250.
+- No legal entity rename, no binding contract party changes, no new financial claims and no change to underlying registered company, bank account, fees or signed deals. Existing HTML terms' `JBRO` represents the platform and contract party as originally defined; platform display name is independent.
+- Public preliminary internet search found other **제이브로 / JBRO** businesses, including a Korean automotive accessory seller `jbrocp.com` and a software supplier listing (Korean business no. 524-81-00072) with similar name; US previous JBRO battery trademark serial 74406863 is third-party reported cancelled 2005. No exact "JBRO 2.5" B2B service discovered through public search. **None of these results constitutes comprehensive trademark clearance.**
+- Need legal clearance in Korea (KIPRIS), US (USPTO), UK (UKIPO), EU (EUIPO TMview), and Hong Kong (IPD), including JBRO, J BRO, 제이브로, JBRO 2.5, JBRO25, JBRO TWO POINT FIVE across classes 35/42 and relevant services. Confirm underlying entity and authorized applicant first.
+- Domain shortlist `jbro25.com`, `jbro2point5.com`, `jbro-25.com`, `jbro25.io`; all exact RDAP registration statuses **unverified** because registry access was blocked. Do not claim available or buy on assumption. Existing confirmed site `jbro-global-network.onrender.com` remains canonical during trial.
+- Reassess brand before paid ad scale, public trademark claim, domain commitment, or contract legal-party revision. If prior right conflicts, roll back display brand and retain operating data.
+
+---
+
 ## CURRENT CAMPAIGN — FIRST10K USD (supersedes prior KRW FIRST10M) — 2026-11-16
 
 **Do not use the older FIRST10M KRW terms below for any new offers.** Active global campaign is **FIRST10K**:
