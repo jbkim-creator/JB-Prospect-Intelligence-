@@ -162,3 +162,88 @@ def admin_verify_claim(claim_id):
     except Exception:
         log.exception("Mission verification failed")
         return jsonify(error="temporarily_unavailable"),503
+
+
+def smoke_test(app, admin_token, allowed_origin):
+    """Scoped live Neon test of mission visibility, unique claims, verified XP and cleanup."""
+    import secrets, hashlib
+    nonce=secrets.token_hex(7)
+    client=app.test_client()
+    a_ids=[]
+    mission_id=None
+    auth={"Authorization":"Bearer "+admin_token}
+    keys=[]
+    try:
+        for index in (0,1):
+            r=client.post("/api/partner-applications",json={
+                "organization":"JBRO_QUEST_TEST_"+nonce+"_"+str(index),
+                "email":"quest-"+nonce+"-"+str(index)+"@example.invalid",
+                "country":"Test","role":"Service partner",
+                "summary":"Synthetic TradeQuest QA only; not a real business.","consent":True
+            },headers={"Origin":allowed_origin})
+            assert r.status_code==201,("application",r.status_code)
+            aid=int(r.get_json()["reference"].split("-")[-1]);a_ids.append(aid)
+            r=client.patch("/api/admin/applications/"+str(aid),headers=auth,json={"status":"approved"})
+            assert r.status_code==200,("approval",r.status_code)
+            r=client.post("/api/admin/applications/"+str(aid)+"/issue-access",headers=auth)
+            assert r.status_code==200,("access",r.status_code)
+            keys.append(r.get_json()["access_token"])
+        resp=client.post("/api/admin/tradequest/missions",headers=auth,json={
+            "title":"JBRO synthetic mission "+nonce,"description":"Test-only opportunity; not a genuine or confidential requirement.",
+            "category":"semiconductor","reward_xp":40})
+        assert resp.status_code==201,("create",resp.status_code)
+        mission_id=resp.get_json()["mission_id"]
+        partner_auth=[{"Authorization":"Bearer "+k} for k in keys]
+        res=client.get("/api/partner/tradequest",headers=partner_auth[0])
+        assert res.status_code==200 and all(m["id"]!=mission_id for m in res.get_json()["missions"]),"draft visible"
+        res=client.patch("/api/admin/tradequest/missions/"+str(mission_id),headers=auth,json={"state":"open"})
+        assert res.status_code==200
+        res=client.get("/api/partner/tradequest",headers=partner_auth[0])
+        assert any(m["id"]==mission_id for m in res.get_json()["missions"]),"published not visible"
+        res=client.post("/api/partner/tradequest/"+str(mission_id)+"/claim",
+            headers=partner_auth[0],json={"contribution":"Synthetic verified research contribution for safe pilot testing only.",
+            "nonconfidential":True})
+        assert res.status_code==201,("claim",res.status_code)
+        claim_id=res.get_json()["claim_id"]
+        duplicate=client.post("/api/partner/tradequest/"+str(mission_id)+"/claim",
+            headers=partner_auth[0],json={"contribution":"Synthetic duplicate contribution for safe pilot testing only.",
+            "nonconfidential":True})
+        assert duplicate.status_code==409,"duplicate accepted"
+        other=client.get("/api/partner/tradequest",headers=partner_auth[1])
+        assert other.status_code==200
+        own=next(m for m in rescan(client,partner_auth[0])["missions"] if m["id"]==mission_id)
+        notown=next(m for m in other.get_json()["missions"] if m["id"]==mission_id)
+        assert own["my_claim_state"]=="pending" and notown["my_claim_state"] is None,"claim isolation"
+        score0=rescan(client,partner_auth[0])["xp"]
+        verified=client.patch("/api/admin/tradequest/claims/"+str(claim_id),headers=auth,json={"state":"verified"})
+        assert verified.status_code==200 and verified.get_json()["credited_xp"]==40
+        score1=rescan(client,partner_auth[0])["xp"]
+        assert score1==score0+40,"XP not awarded"
+        repeated=client.patch("/api/admin/tradequest/claims/"+str(claim_id),headers=auth,json={"state":"verified"})
+        assert repeated.status_code==409,"XP double credited"
+        assert rescan(client,partner_auth[0])["xp"]==score1,"XP total changed after duplicate"
+        assert client.get("/api/admin/tradequest/claims").status_code==401
+        log.info("JBRO_TRADEQUEST_SMOKE_PASS")
+    finally:
+        # Scoped cleanup only for this unique synthetic test. Preserve real applicants and missions.
+        with DB() as conn:
+            with conn.cursor() as cur:
+                if mission_id is not None:
+                    m=cur.execute("SELECT id FROM tradequest_missions WHERE id=%s AND title=%s",
+                        (mission_id,"JBRO synthetic mission "+nonce)).fetchone()
+                    if m:
+                        cur.execute("DELETE FROM tradequest_xp_ledger WHERE claim_id IN (SELECT id FROM tradequest_claims WHERE mission_id=%s)",(mission_id,))
+                        cur.execute("DELETE FROM tradequest_claims WHERE mission_id=%s",(mission_id,))
+                        cur.execute("DELETE FROM tradequest_missions WHERE id=%s",(mission_id,))
+                for aid in a_ids:
+                    row=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND organization LIKE %s",
+                        (aid,"JBRO_QUEST_TEST_"+nonce+"_%")).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM partner_access WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
+
+def rescan(client, header):
+    r=client.get("/api/partner/tradequest",headers=header)
+    assert r.status_code==200,("rescan",r.status_code)
+    return r.get_json()
