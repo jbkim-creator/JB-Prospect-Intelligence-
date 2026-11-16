@@ -1,3 +1,20 @@
+## FIRST10M first-trade commission waiver — 2026-11-16
+
+Active campaign landing page: https://jbro-global-network.onrender.com/#first-trade-offer
+
+**Deal semantics:** Only one specified JBRO 2.5% fee stream from one side of an eligible first transaction is discounted on the FIRST KRW 10,000,000 of principal; max discount KRW 250,000. KRW 5m deal => fee 0; KRW 10m => fee 0; KRW 20m => fee KRW 250k. Taxes, third-party costs, the opposite side's brokerage fee and preexisting fee agreements are excluded. No automatic approval or retrospective changes.
+
+- Source: `jbro-network-api/promotions.py`. New Neon `promo_fee_coupons` table with unique `application_id`, `reward_deal_id` and `deal_room_id` (prevents duplicate use across partner applications in platform).
+- `POST /api/admin/rewards/<deal_id>/first-trade-coupon`: require admin confirmation, approved fee-paying buyer or seller linked to a **draft** sale room and draft reward deal; no previously signed Deal Room for the partner; no previously issued reward agreement or booked receipt; coupon must not already have been issued for the same party or reward deal. **Do not issue without independently confirming the organization's actual first transaction and the commercial payer identity.**
+- `GET /api/public/first-trade-coupon` and authenticated `GET /api/partner/first-trade-coupon` display the public terms / own account coupon assignment only.
+- The `reward_deals` commission ceiling and receipt cap now subtract coupon discount; `reward_contracts` freeze the waiver and net commission cap in partner reward agreement terms. Partner reward accrual is based only on actual discounted commission collected (not gross fees). A completely waived commission has no cash reward pool; XP incentives remain separate.
+- Public site includes FIRST10M Korean headline, English terms, 3 fee examples and campaign opt-in. The application stores `[FIRST10M coupon request]` in the otherwise non-confidential application summary for admin qualification; this **does not issue** a coupon or alter contract economics.
+- Campaign asset pack `jbro-global-network/FIRST10M_CAMPAIGN.md` includes Korean and English social captions, segmented partner outreach, terms, and conversion metrics.
+- Neon-backed smoke test `JBRO_FIRST10M_SMOKE_PASS` verified KRW 20m => KRW 250k waiver / KRW 250k collectible commission, KRW 5m => entire KRW 125k fee waived; repeated issue rejected; non-partner privacy; immutable fee agreement reflects waiver; collectible fee cap rejects overbilling; KRW 250k actual synthetic receipt produces KRW 75k reward pool and KRW 175k retained-before-costs. All synthetic partner/coupon/reward/Deal Room records removed, and temporary smoke flag restored to 0.
+- **Risk controls:** manual issue only; never present eligibility as automatic. No global campaign cap exists yet; manager must set a campaign-wide budget before paid scale-up. Coupon eligibility should be reviewed for duplicate legal entities / aliases across application accounts. Real bank statement and tax documentation are not verified by the application.
+
+---
+
 ## Contract export and post-sign Deal Room execution tracking — 2026-11-16
 
 Code `jbro-network-api/execution.py`, integrated into existing Flask API. New database `deal_execution_events` tracks per-deal, per-partner progress evidence for stages `inspection`, `shipment`, `delivery` and `payment`, each submitted as a claim requiring independent administrator review. A partner submission does **not** certify that goods shipped, inspection passed, or money arrived. Only explicitly reviewed records can be marked `verified` or `rejected`, and repeat reviews are refused. Each partner has a maximum of 20 evidence submissions per deal per 24 hours.
