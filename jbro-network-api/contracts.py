@@ -69,10 +69,12 @@ def frozen_terms(deal, contributor):
                  "participant":contributor["organization"],
                  "application_id":contributor["application_id"]},
       "transaction":{"deal_reference":deal["id"],"title":deal["title"],
-                     "reference_deal_value_krw":deal["deal_value_won"],
+                     "currency":deal["currency"],
+                     "reference_deal_value_minor":deal["deal_value_won"],
+                     "currency_minor_unit_digits":2 if deal["currency"]=="USD" else 0,
                      "jbro_fee_rate_bps":250,"jbro_fee_side":"JBRO's one agreed 2.5% fee stream only",
-                     "first_trade_discount_won":deal.get("coupon_discount_won",0),
-                     "max_collectible_fee_won":max(0,deal["deal_value_won"]*250//10000-deal.get("coupon_discount_won",0))},
+                     "first_trade_discount_minor":deal.get("coupon_discount_won",0),
+                     "max_collectible_fee_minor":max(0,deal["deal_value_won"]*250//10000-deal.get("coupon_discount_won",0))},
       "reward":{"pool_percent_of_commission_received":deal["reward_share_pct"],
                 "participant_pool_allocation_percent":contributor["allocation_pct"],
                 "participant_role":contributor["role"],
@@ -115,7 +117,7 @@ def issue_contracts(deal_id):
     try:
         with DB() as conn:
             with conn.cursor() as cur:
-                deal=cur.execute("""SELECT d.id,d.title,d.deal_value_won,d.reward_share_pct,d.status,
+                deal=cur.execute("""SELECT d.id,d.title,d.deal_value_won,d.currency,d.reward_share_pct,d.status,
                           coalesce(p.discount_won,0)::bigint AS coupon_discount_won
                           FROM reward_deals d LEFT JOIN promo_fee_coupons p ON p.reward_deal_id=d.id
                         WHERE d.id=%s FOR UPDATE OF d""",(deal_id,)).fetchone()
