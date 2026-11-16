@@ -235,7 +235,7 @@ def smoke_test(app,admin_token,origin):
         assert (item["commission_received_minor"],item["reward_pool_minor"],
                 item["jbro_retained_before_costs_minor"])==(25000,7500,17500)
         assert client.get("/api/admin/rewards").status_code==401
-        log.info("JBRO_FIRST10M_SMOKE_PASS")
+        log.info("JBRO_FIRST10K_USD_SMOKE_PASS")
     finally:
         with DB() as conn:
             with conn.cursor() as cur:
