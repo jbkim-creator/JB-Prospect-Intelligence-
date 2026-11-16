@@ -38,8 +38,12 @@ def validate(doc):
             errors.append(f'{at}: duplicate customer/provider/session/question')
         seen.add(key)
         if item.get('collection_method') == 'api_auto_capture':
-            if item.get('observed_web_search_calls', 0) < 1:
+            calls = item.get('observed_web_search_calls', 0)
+            if not isinstance(calls, int) or isinstance(calls, bool) or calls < 1:
                 errors.append(f'{at}: API capture missing web_search_call trace')
+            statuses = item.get('web_search_statuses', [])
+            if not isinstance(statuses, list) or 'completed' not in statuses:
+                errors.append(f'{at}: no completed web-search call evidence')
             if item.get('recommended') != 'unreviewed':
                 errors.append(f'{at}: automated recommendation judgment must start unreviewed')
     return errors
