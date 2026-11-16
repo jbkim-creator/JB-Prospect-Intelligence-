@@ -1,4 +1,4 @@
-"""JBRO FIRST10M fee coupon: waive the 2.5% fee on first USD 10,000 of a first eligible deal.
+"""JBRO FIRST10K fee coupon: waive the 2.5% fee on first USD 10,000 of a first eligible deal.
 
 A coupon belongs to ONE approved fee-paying counterparty (buyer OR seller) and
 ONE linked draft Deal Room + Reward Deal; unique per application. No retroactivity.
@@ -11,7 +11,7 @@ from flask import Blueprint, request, jsonify
 bp=Blueprint("promotions",__name__)
 DB=ADMIN=PARTNER=None
 log=logging.getLogger(__name__)
-CODE="FIRST10M"
+CODE="FIRST10K"
 CAP_VALUE_USD_CENTS=1_000_000
 FEE_BPS=250
 MAX_DISCOUNT_USD_CENTS=CAP_VALUE_USD_CENTS*FEE_BPS//10000
@@ -28,7 +28,7 @@ def ensure_schema():
             application_id BIGINT NOT NULL UNIQUE REFERENCES partner_applications(id),
             reward_deal_id BIGINT NOT NULL UNIQUE REFERENCES reward_deals(id),
             deal_room_id BIGINT NOT NULL UNIQUE REFERENCES deal_rooms(id),
-            campaign VARCHAR(20) NOT NULL DEFAULT 'FIRST10M' CHECK(campaign='FIRST10M'),
+            campaign VARCHAR(20) NOT NULL DEFAULT 'FIRST10K' CHECK(campaign IN ('FIRST10M','FIRST10K')),
             discount_won BIGINT NOT NULL CHECK(discount_won BETWEEN 1 AND 250000),
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             CONSTRAINT coupon_discount_valid CHECK(discount_won>0)
@@ -89,9 +89,9 @@ def assign_coupon(deal_id):
                 amount=discount(deal["deal_value_won"])
                 if amount<1:return jsonify(error="invalid_discount"),400
                 row=cur.execute("""INSERT INTO promo_fee_coupons
-                    (application_id,reward_deal_id,deal_room_id,discount_won,currency)
-                    VALUES (%s,%s,%s,%s,'USD') RETURNING id""",
-                    (aid,deal_id,room["id"],amount)).fetchone()
+                    (application_id,reward_deal_id,deal_room_id,discount_won,currency,campaign)
+                    VALUES (%s,%s,%s,%s,'USD',%s) RETURNING id""",
+                    (aid,deal_id,room["id"],amount,CODE)).fetchone()
                 cur.execute("""INSERT INTO reward_audit(deal_id,action,reference)
                     VALUES(%s,'first_trade_coupon_issued',%s)""",(deal_id,CODE+":"+str(aid)))
         return jsonify(coupon_id=row["id"],campaign=CODE,
@@ -130,7 +130,7 @@ def smoke_test(app,admin_token,origin):
                 "organization":"JBRO_COUPON_QA_"+nonce+"_"+str(i),
                 "email":"coupon-"+nonce+"-"+str(i)+"@example.invalid",
                 "country":"Test","role":"Buyer" if i<2 else "Supplier",
-                "summary":"Only a synthetic FIRST10M coupon test entity.","consent":True})
+                "summary":"Only a synthetic FIRST10K USD coupon test entity.","consent":True})
             assert r.status_code==201,("intake",r.status_code)
             aid=int(r.get_json()["reference"].split("-")[-1]);aids.append(aid)
             assert client.patch("/api/admin/applications/"+str(aid),headers=admin,json={"status":"approved"}).status_code==200
