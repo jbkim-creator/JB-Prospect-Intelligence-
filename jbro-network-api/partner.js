@@ -27,6 +27,33 @@ async function refreshQuests(){
    $('quest-list').append(div);
  }
 }
+async function refreshSaleRooms(){
+ const root=$('sale-partner-rooms');root.replaceChildren();const status=$('sale-partner-status');
+ const data=await api('/api/partner/deal-rooms');const rooms=data.rooms||[];
+ if(!rooms.length){root.append(el('div','empty','No buyer–seller sale agreements assigned to your company yet.'));return}
+ for(const room of rooms){
+  const d=room.contract,card=el('article','opp-card');
+  card.append(el('h3','',room.title+' · Deal Room '+room.id),el('div','meta','My role: '+room.my_role+' · '+room.status));
+  if(d){
+   card.append(el('div','meta','Document SHA-256: '+d.document_sha256));
+   card.append(el('p','', 'Recorded signatures: '+d.signatures.map(x=>x.role).join(', ')||'None'));
+   const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#f4faf6;border-radius:8px;font-size:12px';pre.textContent=JSON.stringify(JSON.parse(d.terms_json),null,2);card.append(pre);
+   if(room.status==='issued'&&!d.signatures.some(x=>x.role===room.my_role)){
+    const form=document.createElement('form');const label=el('label','','Full legal name and signing capacity');
+    const input=document.createElement('input');input.required=true;input.minLength=2;input.maxLength=120;input.placeholder='e.g. Jane Doe, authorized director';label.append(input);
+    const consent=el('label','check'),check=document.createElement('input');check.type='checkbox';check.required=true;consent.append(check,document.createTextNode(' I have authority to represent this buyer/seller and accept this exact sale contract.'));
+    const btn=el('button','','Accept buyer–seller sale agreement');btn.type='submit';form.append(label,consent,btn);
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();if(!form.reportValidity())return;
+      if(!confirm('By proceeding, you affirmatively accept the complete document shown with its SHA-256 fingerprint.'))return;
+      btn.disabled=true;try{await api('/api/partner/deal-rooms/'+room.id+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({representative:input.value.trim(),document_sha256:d.document_sha256,confirm_authorized_signatory:true,confirm_read_and_accept:true})});status.textContent='Electronic acceptance saved. Both parties must accept for completion.';await refreshSaleRooms();}
+      catch(err){status.textContent='Not accepted: '+err.message}finally{btn.disabled=false}
+    });card.append(form);
+   }
+  }
+  root.append(card);
+ }
+}
 async function refreshContracts(){
  const root=$('contracts-list');root.replaceChildren();const status=$('contracts-status');
  const data=await api('/api/partner/contracts');const docs=data.contracts||[];
@@ -61,7 +88,7 @@ async function refreshRewards(){
     root.append(div);
   }
 }
-async function refresh(){await refreshQuests();await refreshContracts();await refreshRewards();const data=await api('/api/partner/opportunities');$('list').replaceChildren();if(!data.opportunities.length){$('list').append(el('div','empty','No opportunities submitted yet.'));return}for(const item of data.opportunities){const div=el('article','opp-card');div.append(el('div','ref','JBRO-O-'+String(item.id).padStart(6,'0')),el('h3','',item.title),el('div','meta',item.category.replaceAll('_',' ')+' · '+item.status+' · '+(item.country||'Region unspecified')),el('p','desc',item.summary));$('list').append(div)}}
+async function refresh(){await refreshQuests();await refreshSaleRooms();await refreshContracts();await refreshRewards();const data=await api('/api/partner/opportunities');$('list').replaceChildren();if(!data.opportunities.length){$('list').append(el('div','empty','No opportunities submitted yet.'));return}for(const item of data.opportunities){const div=el('article','opp-card');div.append(el('div','ref','JBRO-O-'+String(item.id).padStart(6,'0')),el('h3','',item.title),el('div','meta',item.category.replaceAll('_',' ')+' · '+item.status+' · '+(item.country||'Region unspecified')),el('p','desc',item.summary));$('list').append(div)}}
 $('login').addEventListener('submit',async e=>{e.preventDefault();token=$('key').value.trim();$('login-status').textContent='Verifying your invitation...';try{const me=await api('/api/partner/me');$('identity').textContent=me.partner.organization+' · '+me.partner.role;$('key').value='';screen.hidden=true;workspace.hidden=false;await refresh()}catch(err){$('login-status').textContent=err.message}});
 $('opp').addEventListener('submit',async e=>{e.preventDefault();if(!$('opp').reportValidity())return;const btn=$('opp').querySelector('button[type=submit]');btn.disabled=true;$('submit-status').textContent='Submitting...';try{const body={category:$('category').value,title:$('title').value.trim(),country:$('country').value.trim(),summary:$('summary').value.trim(),confirm_nonconfidential:$('confirm').checked};const result=await api('/api/partner/opportunities',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('submit-status').textContent='Submitted for JBRO review: '+result.reference;$('opp').reset();await refresh()}catch(err){$('submit-status').textContent='Not submitted: '+err.message}finally{btn.disabled=false}});
 $('refresh').addEventListener('click',async()=>{try{await refresh();$('list-status').textContent='Updated.'}catch(err){$('list-status').textContent=err.message}});
