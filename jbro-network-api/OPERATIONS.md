@@ -1,3 +1,20 @@
+## Partner opportunity workspace — verified 2026-11-16
+
+- Partner workspace URL: https://jbro-network-api.onrender.com/partner
+- Admin review URL: https://jbro-network-api.onrender.com/admin
+- Database tables: `partner_access` (SHA-256 hashed one-time access keys; revoked by timestamp), `partner_opportunities` (partner ownership and status).
+- Partner cannot log in from an application approval alone. Admin must explicitly issue an access key for an approved application. Generated key is shown once; a new key rotates the previous key.
+- Partner submissions: buy requirement, stock offer, industrial asset, project opportunity, or service capability. API validates a non-confidential information checkbox; maximum 30 submitted opportunities per partner per 24 hours.
+- Partner list API filters by authenticated `application_id`; partners cannot retrieve another organization's records.
+- Admin can list and review all opportunities; **qualifying an opportunity does not automatically expose it to other partners or trigger sales emails**.
+- Live Neon-backed smoke test: Render log `JBRO_PARTNER_ISOLATION_SMOKE_PASS`. It tested 2 synthetic applicants: intake, approval, one-time key issue, opportunity submission, owner isolation, admin review, revocation, unauthenticated admin denial.
+- The test-only flag `JBRO_PARTNER_SMOKE_TEST` was disabled immediately afterward. Neon database queried after cleanup: 0 applications, 0 credentials, 0 opportunities, 0 activity events.
+- Public-accessible /partner HTML is an authentication prompt only; all data APIs require an active partner key.
+- Security limitations: invite keys are long-lived until rotation/revocation; no multi-factor authentication, no password reset workflow, no per-request abuse monitoring, no audited partner legal agreement or privacy policy. Before scaling partners, replace invite keys with managed identity or short-lived sessions, formalize data processing/retention and backups, and run independent browser security tests.
+- No invitation emails have been sent, no customer has been granted access, and no real opportunities have yet been submitted.
+
+---
+
 ## Partner Review Dashboard — deployed 2026-11-16
 
 - URL: https://jbro-network-api.onrender.com/admin
