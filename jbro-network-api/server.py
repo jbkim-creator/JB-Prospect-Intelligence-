@@ -173,6 +173,87 @@ def authorized_admin():
     v=request.headers.get("Authorization","")
     return v.startswith("Bearer ") and hmac.compare_digest(v[7:],ADMIN_TOKEN)
 
+@app.get("/api/admin/first10k-funnel")
+def private_first10k_funnel():
+    """Consented application-source aggregates; no public tracking, PII, or inferred sales."""
+    if not authorized_admin():
+        return jsonify(error="unauthorized"),401
+    try:
+        with connection() as conn:
+            sources=conn.execute("""
+              WITH leads AS (
+                SELECT id,status,role,
+                  COALESCE(NULLIF(substring(summary from '\\[Referral: ([A-Za-z0-9_-]{1,40})\\]'),''),'UNATTRIBUTED') AS source,
+                  (summary LIKE '[FIRST10K coupon request]%') AS interested
+                FROM partner_applications
+              )
+              SELECT l.source,
+                count(*)::int AS applications,
+                count(*) FILTER (WHERE l.interested)::int AS coupon_requests,
+                count(*) FILTER (WHERE l.status='approved')::int AS approved_applications,
+                count(*) FILTER (WHERE l.interested AND l.status='approved')::int AS approved_coupon_interest,
+                count(DISTINCT p.id)::int AS issued_coupons
+              FROM leads l
+              LEFT JOIN promo_fee_coupons p ON p.application_id=l.id AND p.campaign='FIRST10K'
+              GROUP BY l.source
+              ORDER BY count(*) DESC,l.source ASC LIMIT 100
+            """).fetchall()
+            issued=conn.execute("""
+              SELECT count(*)::int AS coupon_count,
+                     COALESCE(sum(discount_won) FILTER (WHERE currency='USD'),0)::bigint AS waived_usd_minor
+              FROM promo_fee_coupons WHERE campaign='FIRST10K'
+            """).fetchone()
+            completed=conn.execute("""
+              WITH latest_stage AS (
+                SELECT DISTINCT ON (room_id,stage) room_id,stage,status
+                FROM deal_execution_events
+                ORDER BY room_id,stage,created_at DESC,id DESC
+              ), completed_rooms AS (
+                SELECT dr.id,r.deal_value_won AS value_minor
+                FROM deal_rooms dr
+                JOIN reward_deals r ON r.id=dr.reward_deal_id AND r.currency='USD'
+                WHERE EXISTS (
+                  SELECT 1 FROM deal_sale_contracts c WHERE c.room_id=dr.id AND c.status='signed'
+                )
+                AND (SELECT count(*) FROM latest_stage s WHERE s.room_id=dr.id AND s.status='verified')=4
+                AND NOT EXISTS (
+                  SELECT 1 FROM latest_stage s WHERE s.room_id=dr.id AND s.status<>'verified'
+                )
+              )
+              SELECT count(*)::int AS completed_coupon_deals,
+                     COALESCE(sum(value_minor),0)::bigint AS completed_coupon_gmv_usd_minor
+              FROM completed_rooms c
+              WHERE EXISTS (
+                SELECT 1 FROM promo_fee_coupons p WHERE p.deal_room_id=c.id
+                AND p.campaign='FIRST10K' AND p.currency='USD'
+              )
+            """).fetchone()
+        totals={
+          "applications":sum(int(v["applications"]) for v in sources),
+          "coupon_requests":sum(int(v["coupon_requests"]) for v in sources),
+          "approved_applications":sum(int(v["approved_applications"]) for v in sources),
+          "issued_coupons":int(issued["coupon_count"]),
+          "waived_usd_minor":int(issued["waived_usd_minor"]),
+          "completed_coupon_deals":int(completed["completed_coupon_deals"]),
+          "completed_coupon_gmv_usd_minor":int(completed["completed_coupon_gmv_usd_minor"])
+        }
+        return jsonify(
+            totals=totals,
+            sources=[dict(v) for v in sources],
+            definitions={
+              "applications":"All submitted partner applications. Source extracted only from user-provided optional referral code.",
+              "coupon_requests":"Applications that opted in with the FIRST10K coupon request tag; not approvals.",
+              "approved_applications":"Approved partner applications, not approved coupons.",
+              "issued_coupons":"Existing FIRST10K coupon issuance records; no coupon is automatically granted.",
+              "waived_usd_minor":"Sum of recorded USD coupon discount in cents; not a cash marketing expense or JBRO fee receipt.",
+              "completed_coupon_gmv_usd_minor":"Completed verified USD Deal Rooms linked to at least one issued FIRST10K coupon; counted once per deal. Association is not proof the coupon caused the transaction.",
+              "attribution":"No visitor, click, conversion-rate, or email-open tracking. Codes can be user-entered and are not independently authenticated.",
+              "privacy":"Admin-only grouped application counts, no names, emails, or customer identifiers."
+            })
+    except Exception:
+        app.logger.exception("Private FIRST10K funnel read failed")
+        return jsonify(error="temporarily_unavailable"),503
+
 @app.get("/api/admin/gmv-kpis")
 def private_gmv_kpis():
     """Read-only, admin-only trading KPIs. Never treat a quote or signed deal as completed GMV."""
