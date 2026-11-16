@@ -7,6 +7,8 @@ ORIGIN = "https://jbro-security-guardian.onrender.com"
 RATE = {}
 LOCK = threading.Lock()
 ACTIVE = threading.BoundedSemaphore(8)
+FUNNEL = {key:0 for key in ("page_view","scan_start","dns_complete","https_complete","https_error","report_download","consult_click")}
+FUNNEL_LOCK = threading.Lock()
 HOST_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 MAX_HEADER_BYTES=16384
 
@@ -53,7 +55,7 @@ def analyze(domain):
     finding("HTTPS 인증서","good" if days is not None and days>14 else "warn" if days is not None else "unknown",
         ("유효기간 약 "+str(days)+"일 남음" if days is not None else "인증서 유효기간 확인 불가"))
     hsts=headers.get("strict-transport-security","")
-    hsts_age_match=re.search(r"(?:^|;)\\s*max-age\\s*=\\s*(\\d+)",hsts,re.I)
+    hsts_age_match=re.search(r"(?:^|;)\s*max-age\s*=\s*(\d+)",hsts,re.I)
     hsts_age=int(hsts_age_match.group(1)) if hsts_age_match else 0
     finding("HSTS","good" if hsts_age>0 else "warn","HTTPS 강제 설정(HSTS)이 "+("확인됩니다. 기간 및 서브도메인 적용은 별도 검토가 필요합니다." if hsts_age>0 else "없거나 max-age=0으로 비활성화되어 있습니다."))
     csp=headers.get("content-security-policy","")
@@ -80,6 +82,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options","nosniff")
         self.end_headers()
         self.wfile.write(body)
+    def do_POST(self):
+        if urlsplit(self.path).path != "/api/event":
+            return self.send_json(404,{"error":"not found"})
+        if self.headers.get("Origin") != ORIGIN:
+            return self.send_json(403,{"error":"not allowed"})
+        length=self.headers.get("Content-Length","")
+        if not length.isdigit() or int(length)>40 or int(length)<1:
+            return self.send_json(400,{"error":"invalid body"})
+        if self.headers.get("Content-Type","").split(";")[0].strip().lower() != "text/plain":
+            return self.send_json(415,{"error":"unsupported content type"})
+        event=self.rfile.read(int(length)).decode("ascii","ignore")
+        if event not in FUNNEL:
+            return self.send_json(400,{"error":"invalid event"})
+        with FUNNEL_LOCK:
+            FUNNEL[event]+=1
+            count=FUNNEL[event]
+        # No domain, IP, email, URL, cookie, user-agent, or identifier in our event log.
+        print("JBRO FUNNEL event="+event+" process_count="+str(count),flush=True)
+        return self.send_json(200,{"ok":True})
     def do_GET(self):
         p=urlsplit(self.path)
         if p.path=="/health":
