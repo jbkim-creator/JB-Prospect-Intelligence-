@@ -42,6 +42,15 @@ jobs:
             echo "::error::OPENAI_API_KEY is not configured in repository Actions secrets"
             exit 1
           fi
+      - name: Require evidence encryption secret before billing
+        if: ${{ inputs.execute_paid_calls }}
+        env:
+          EVIDENCE_ENCRYPTION_PASSWORD: ${{ secrets.EVIDENCE_ENCRYPTION_PASSWORD }}
+        run: |
+          if [ -z "$EVIDENCE_ENCRYPTION_PASSWORD" ]; then
+            echo "::error::Set EVIDENCE_ENCRYPTION_PASSWORD as a GitHub Actions secret before any paid run"
+            exit 1
+          fi
       - name: Execute expressly approved limited paid calls
         if: ${{ inputs.execute_paid_calls == true }}
         working-directory: ai-visibility
