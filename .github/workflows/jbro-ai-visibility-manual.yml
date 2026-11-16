@@ -47,6 +47,15 @@ jobs:
             echo "::error::OPENAI_API_KEY secret missing. No paid call attempted."
             exit 1
           fi
+      - name: Require evidence encryption secret before billing
+        if: ${{ inputs.approve_paid_calls }}
+        env:
+          EVIDENCE_ENCRYPTION_PASSWORD: ${{ secrets.EVIDENCE_ENCRYPTION_PASSWORD }}
+        run: |
+          if [ -z "$EVIDENCE_ENCRYPTION_PASSWORD" ]; then
+            echo "::error::Set EVIDENCE_ENCRYPTION_PASSWORD as a GitHub Actions secret before any paid run"
+            exit 1
+          fi
       - name: Execute explicitly approved paid pilot
         if: ${{ inputs.approve_paid_calls }}
         env:
