@@ -1,3 +1,18 @@
+## JBRO TradeQuest — first live release (2026-11-16)
+
+- Partner page: https://jbro-network-api.onrender.com/partner (invite-only)
+- Admin page: https://jbro-network-api.onrender.com/admin (admin token required)
+- Added `tradequest.py` and Neon tables `tradequest_missions`, `tradequest_claims`, `tradequest_xp_ledger`.
+- Admin creates draft missions, explicitly opens/closes them, reviews claims and verifies or rejects contributions. Every verified claim grants fixed, non-transferable XP exactly once via database-enforced unique `claim_id`. No monetary representation or payout.
+- Partner sees only open mission description and their own claim status/total XP; submissions never expose identities or another partner's claim evidence. Claim text is private to submitting partner and admin.
+- Real Neon smoke test passed: Render log `JBRO_TRADEQUEST_SMOKE_PASS`. Tested draft invisibility, open visibility, authenticated contribution, duplicate claim rejection, other-partner isolation, verified XP, repeat-award rejection, unauthenticated admin denial. All synthetic records cleaned up.
+- Smoke test env `JBRO_QUEST_SMOKE_TEST=0` restored; normal production redeploy triggered.
+- Two generic **exploratory** missions were added as open records: semiconductor sourcing capability and enterprise HDD supply-channel qualification. These are clearly labeled PILOT and explicitly NOT confirmed purchase orders. They contain no counterparty names, confidential terms or actual RFQ representation.
+- As of deployment, claims and XP awards are 0; no real partners were invited or paid.
+- Future hardening: CAPTCHA/rate-limiting for contributions, MFA/short-lived partner sessions, privacy controls, audited evidence and appeals workflow; external browser QA before broad rollout.
+
+---
+
 ## Partner opportunity workspace — verified 2026-11-16
 
 - Partner workspace URL: https://jbro-network-api.onrender.com/partner
