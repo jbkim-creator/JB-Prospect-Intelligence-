@@ -1,0 +1,6 @@
+date,company,recipient,segment,status,gmail_thread,next_action
+2026-11-16,웰투두,support@welltodo.co.kr,commerce,sent,1a1e1be3c3c59c82,wait_for_reply
+2026-11-16,셀데이,sellday@evolv.kr,SaaS,sent,1a1e1be40c21971d,wait_for_reply
+2026-11-16,더미라클소프트,company@themiraclesoft.com,industrial_AI,sent,1a1e1be444295e40,wait_for_reply
+2026-11-16,오노퍼스,support@onoffus.com,SaaS_operations,verified_unsent,,partner_or_direct_pilot
+2026-11-16,듀오랩스,support@duolabs.co.kr,software_development,verified_unsent,,partner_or_direct_pilot
