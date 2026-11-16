@@ -22,15 +22,22 @@ Date: 2026-11-16. Internal deal-operations document only; **no customer platform
 - ODG/Origin-IC indicative source: 1,000 pcs DC week 2610 at **USD 10.030/pc** EXW plus USD 35 bank fee and seller-supported HK freight, 100% prepayment, upstream spot stock; unavailable manufacturer/authorized distributor CoC; third-party test proposed. Lot and ownership not verified. Last supplier reply asked whether PO exists. **Not yet an executable order.**
 - AOYUE / Michelle alternative: indicative **1,000 pcs at USD 9.503/pc**, DC 26+, 'stock', date 2026-11-16, thread `1a1ce22caf0125c3`. The price is **USD 0.527/pc** below ODG quote, or USD 527 before other fees on 1,000 pcs; availability, ownership, CoC, actual labels, HK freight/terms and commission are all unverified. The comparison is not an all-in quote.
 - LIMCHIP separate TPS92630QPWPRQ1: supplier insists full sealed 2,000 pcs, will not split 500/1000; original USD 1.66/pc quote expired and needs re-quote on buyer schedule. No confirmed order. Thread `1a1cd60ba2d76832`.
-- A follow-up to AOYUE for lot provenance, photos, quote validity, inspection before prepayment and separate fee was **attempted but Gmail send returned error**; Gmail search did not confirm delivery. Gmail create_draft also failed. **Do not claim sent or drafted in Gmail.** For manual sending, reuse this existing thread and request in one message the six categories: exact lot/DC+labels; own vs upstream and stock location; manufacturer/authorized traceability or independent inspection; landed HK all-in quote; prepayment/rejection terms; separate protected JBRO fee.
+- **Updated 2026-11-16:** The consolidated AOYUE verification reply WAS SUCCESSFULLY SENT in existing thread `1a1ce22caf0125c3`, confirmed Gmail sent message ID `1a1e3deafd535396`. It requests exact lot/DC+label photos; owned versus upstream stock and location; authorized traceability or third-party testing; delivered Hong Kong quote validity; inspection/payment/rejection terms; and separate protected JBRO commission. **Do not resend until AOYUE answers.**
 - Risk gate: do not promote availability or authenticity as verified; 100% prepayment and no authorized CoC are significant risks. Avoid sharing buyer identity before bilateral fee/noncircumvention agreement.
 
 ## Priority order
 1. **Await FAR response**; one consolidated request was sent today. Do not send repeat unless new facts arrive.
-2. **Request AOYUE verification** in original Gmail thread after Gmail connector recovers. Do not resend automatically without checking sent status; there is no confirmed sent mail.
+2. **Await AOYUE verification** — sent successfully 2026-11-16 message `1a1e3deafd535396`. No further supplier message until new facts.
 3. **Await Bobby on buyer conditions**; his reply is prerequisite to asking seller to reserve or preparing a firm offer.
 4. **Await ExcessChip buyer's revised price** until FAR provides DC; buyer has already stated the next step.
 5. **Qualify first approved pilot partner(s)** after consent and KYC, confirm seller/buyer legal signatory identities and agreed currency/fee. Then add actual application/Deal Room with traceable supporting approvals, not synthetic data. FIRST10K applies only to a qualifying USD first-time fee-paying party, after JBRO approval, in one agreed 2.5% fee stream, maximum US$250.
 
 ## Internal status
 No PO, coupon, signed buyer/seller agreement, or JBRO commission receipt exists in Neon. Actual purchase offers and supplier quotes remain non-binding until verification and written contracts. No new cold outbound messages have been sent in this review.
+
+
+## Latest inbox gate review — 2026-11-16
+- Checked four Gmail streams after the AOYUE verification message: no new seller reply from AOYUE or FAR Korea and no new buyer reply from RuiReach or ExcessChip.
+- Only the AOYUE evidence request was sent after the prior report; no repeated buyer/seller followup was sent in this round.
+- **Revenue caution:** On a hypothetical USD 9,503 RuiReach trade, a fully approved FIRST10K buyer coupon would waive the buyer's entire 2.5% fee. Do not book an expected buyer-side fee without separate documented exemption analysis or another contractually agreed, eligible fee-bearing party. Seller-side fee / protected margin is still not agreed. Platform brand "2.5" is not itself evidence of an agreed commission.
+- Contingency: if AOYUE cannot supply batch-specific photos, valid traceability or risk-appropriate third-party testing and prepayment protections, do not treat the lot as verified; compare alternative suppliers on the same evidence and landed-cost basis.
