@@ -236,6 +236,10 @@ def finalize(deal_id):
                 deal=cur.execute("SELECT id,status FROM reward_deals WHERE id=%s FOR UPDATE",(deal_id,)).fetchone()
                 if not deal:return failure("not_found",404)
                 if deal["status"]!="draft":return failure("already_signed",409)
+                # If this commission pool is linked to a buyer/seller Deal Room, both parties must first accept the sale terms.
+                linked=cur.execute("SELECT id,status FROM deal_rooms WHERE reward_deal_id=%s",(deal_id,)).fetchone()
+                if linked and linked["status"]!="signed":
+                    return failure("buyer_seller_sale_contract_not_signed",409)
                 rows=cur.execute("""SELECT r.id,r.status,r.agreement_sha256,
                     (SELECT count(*) FROM reward_contract_assents s WHERE s.contract_id=r.id) AS signatures
                     FROM reward_contracts r WHERE r.deal_id=%s ORDER BY r.id""",(deal_id,)).fetchall()
