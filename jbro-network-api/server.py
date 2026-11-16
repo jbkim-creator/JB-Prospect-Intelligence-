@@ -503,6 +503,8 @@ try:
         dealrooms.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
     if os.getenv("JBRO_EXECUTION_SMOKE_TEST") == "1":
         execution.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
+    if os.getenv("JBRO_FIRST10M_SMOKE_TEST") == "1":
+        promotions.smoke_test(app, ADMIN_TOKEN, ALLOWED_ORIGIN)
 except Exception:
     app.logger.error("JBRO_NEON_DB_STARTUP_NOT_READY")
 
