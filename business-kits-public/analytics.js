@@ -11,6 +11,20 @@ if(id && /^G-[A-Z0-9]+$/.test(id)){
  const s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(id);document.head.appendChild(s);
  window.gtag=function(){window.dataLayer.push(arguments)};window.gtag('js',new Date());window.gtag('config',id,{send_page_view:true});
 }
+document.addEventListener('DOMContentLoaded',()=>{
+ const params=new URLSearchParams(location.search);
+ const campaign=params.get('utm_campaign')||'';
+ const source=params.get('utm_source')||'';
+ const content=params.get('utm_content')||'';
+ if(source || content || campaign){
+  document.querySelectorAll('a[href^="mailto:"]').forEach(a=>{
+   const u=new URL(a.href);const q=new URLSearchParams(u.search);
+   const prior=q.get('body')||'안녕하세요. JBRO Business Kit 구매 안내를 받고 싶습니다.';
+   q.set('body',prior+'\n\n방문 경로: '+[source,campaign,content].filter(Boolean).join(' / ')+'\n(원하지 않으면 이 줄을 삭제해 주세요.)');
+   u.search=q.toString(); a.href=u.toString();
+  });
+ }
+});
 document.addEventListener('click',function(e){
  const a=e.target.closest('a');if(!a)return;
  if(a.href.includes('JBRO_Free_Quote_Sample.csv'))window.jbroTrack('sample_download',{file_name:'JBRO_Free_Quote_Sample.csv'});
