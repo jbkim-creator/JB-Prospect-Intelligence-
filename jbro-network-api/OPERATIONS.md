@@ -1,3 +1,17 @@
+## Partner Review Dashboard — deployed 2026-11-16
+
+- URL: https://jbro-network-api.onrender.com/admin
+- Source: `jbro-network-api/admin.html`, `admin.css`, `admin.js`, served from the API as same-origin assets.
+- Render deploy: `dep-dbt97i56e07s73bq4up0` status `live`. Startup log: `JBRO_NEON_DB_STARTUP_READY`.
+- Dashboard shows applications and filters by status, and updates status via authenticated PATCH. **Approval is administrative screening only; it does not grant access to deal records or trigger an email.**
+- Access requires the Render environment value `JBRO_ADMIN_TOKEN` (length 32+). To set a token you know, go to Render > `jbro-network-api` > Environment > edit `JBRO_ADMIN_TOKEN` with a unique random secret of at least 32 characters, save and wait for its resulting deploy to be live. Do not send the token in chat, email or GitHub.
+- The login token is held in JavaScript memory only, not localStorage/cookies. The dashboard does not embed it in public source or URLs. Use the Lock button when done.
+- The UI itself loads publicly, but no applicant details are returned by the server without a valid bearer token.
+- Render API public browser reachability and manual button-click QA still need independent verification.
+- Post-deploy Neon check: zero applications and zero activity events.
+
+---
+
 ## End-to-end write / review verification — 2026-11-16
 
 - Render deploy `dep-dbt951ff3r2c73ca7et0` reached `live`.
