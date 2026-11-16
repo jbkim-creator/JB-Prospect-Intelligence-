@@ -4,6 +4,7 @@ import json
 import time
 import hmac
 import hashlib
+import secrets
 import logging
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, make_response, send_from_directory
@@ -56,7 +57,7 @@ def headers(response):
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Content-Security-Policy"] = ("default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; connect-src 'self'" if request.path in ("/admin", "/admin.js", "/admin.css") else "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+    response.headers["Content-Security-Policy"] = ("default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; connect-src 'self'" if request.path in ("/admin", "/admin.js", "/admin.css", "/partner", "/partner.js", "/partner.css") else "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
     if request.headers.get("Origin") == ALLOWED_ORIGIN:
         response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
@@ -75,6 +76,18 @@ def admin_script():
 @app.get("/admin.css")
 def admin_style():
     return send_from_directory(os.path.dirname(__file__), "admin.css", mimetype="text/css")
+
+@app.get("/partner")
+def partner_console():
+    return send_from_directory(os.path.dirname(__file__), "partner.html")
+
+@app.get("/partner.js")
+def partner_script():
+    return send_from_directory(os.path.dirname(__file__), "partner.js", mimetype="application/javascript")
+
+@app.get("/partner.css")
+def partner_style():
+    return send_from_directory(os.path.dirname(__file__), "partner.css", mimetype="text/css")
 
 @app.get("/healthz")
 def health():
@@ -169,6 +182,152 @@ def update_application(application_id):
                     return jsonify(error="not_found"),404
                 cur.execute("INSERT INTO activity_events(entity_type,entity_id,action) VALUES ('partner_application',%s,%s)",(application_id,status))
         return jsonify(status=status,id=application_id)
+    except Exception:
+        return jsonify(error="temporarily_unavailable"),503
+
+
+# Partner access: separate one-time credentials; application approval alone is not authorization.
+OPPORTUNITY_CATEGORIES = {"buy_requirement","stock_offer","industrial_asset","project_opportunity","service_capability"}
+
+def authorized_partner_id():
+    auth=request.headers.get("Authorization","")
+    if not auth.startswith("Bearer "):
+        return None
+    credential=auth[7:]
+    if len(credential)<40 or len(credential)>200:
+        return None
+    credential_hash=hashlib.sha256(credential.encode()).hexdigest()
+    with connection() as conn:
+        row=conn.execute("""
+            SELECT a.id FROM partner_access p
+            JOIN partner_applications a ON a.id=p.application_id
+            WHERE p.token_sha256=%s AND p.revoked_at IS NULL AND a.status='approved'
+        """,(credential_hash,)).fetchone()
+    return row["id"] if row else None
+
+@app.post("/api/admin/applications/<int:application_id>/issue-access")
+def issue_partner_access(application_id):
+    if not authorized_admin():
+        return jsonify(error="unauthorized"),401
+    credential=secrets.token_urlsafe(42)
+    hashed=hashlib.sha256(credential.encode()).hexdigest()
+    try:
+        with connection() as conn:
+            with conn.cursor() as cur:
+                row=cur.execute("SELECT status FROM partner_applications WHERE id=%s FOR UPDATE",(application_id,)).fetchone()
+                if row is None:
+                    return jsonify(error="not_found"),404
+                if row["status"]!="approved":
+                    return jsonify(error="requires_approved_application"),409
+                cur.execute("""
+                    INSERT INTO partner_access(application_id,token_sha256,revoked_at)
+                    VALUES (%s,%s,NULL)
+                    ON CONFLICT (application_id)
+                    DO UPDATE SET token_sha256=EXCLUDED.token_sha256,issued_at=now(),revoked_at=NULL
+                """,(application_id,hashed))
+                cur.execute("INSERT INTO activity_events(entity_type,entity_id,action) VALUES ('partner_application',%s,'credential_issued')",(application_id,))
+        return jsonify(application_id=application_id,access_token=credential,portal_url="https://jbro-network-api.onrender.com/partner")
+    except Exception:
+        app.logger.exception("Access issuance failed")
+        return jsonify(error="temporarily_unavailable"),503
+
+@app.post("/api/admin/applications/<int:application_id>/revoke-access")
+def revoke_partner_access(application_id):
+    if not authorized_admin():
+        return jsonify(error="unauthorized"),401
+    try:
+        with connection() as conn:
+            with conn.cursor() as cur:
+                row=cur.execute("UPDATE partner_access SET revoked_at=now() WHERE application_id=%s AND revoked_at IS NULL RETURNING application_id",(application_id,)).fetchone()
+                if row:
+                    cur.execute("INSERT INTO activity_events(entity_type,entity_id,action) VALUES ('partner_application',%s,'credential_revoked')",(application_id,))
+        return jsonify(revoked=bool(row))
+    except Exception:
+        return jsonify(error="temporarily_unavailable"),503
+
+@app.get("/api/partner/me")
+def partner_me():
+    try:
+        application_id=authorized_partner_id()
+        if application_id is None:
+            return jsonify(error="unauthorized"),401
+        with connection() as conn:
+            row=conn.execute("SELECT id,organization,email,role,status FROM partner_applications WHERE id=%s",(application_id,)).fetchone()
+        return jsonify(partner=row)
+    except Exception:
+        return jsonify(error="temporarily_unavailable"),503
+
+@app.route("/api/partner/opportunities",methods=["GET","POST"])
+def partner_opportunities():
+    try:
+        application_id=authorized_partner_id()
+        if application_id is None:
+            return jsonify(error="unauthorized"),401
+        if request.method=="GET":
+            with connection() as conn:
+                rows=conn.execute("SELECT id,category,title,summary,country,status,created_at FROM partner_opportunities WHERE application_id=%s ORDER BY created_at DESC LIMIT 100",(application_id,)).fetchall()
+            for row in rows:
+                row["created_at"]=row["created_at"].isoformat()
+            return jsonify(opportunities=rows)
+        if not request.is_json:
+            return jsonify(error="json_required"),415
+        data=request.get_json(silent=True)
+        if not isinstance(data,dict):
+            return jsonify(error="invalid_payload"),400
+        category=str(data.get("category","")).strip()
+        title=str(data.get("title","")).strip()
+        summary=str(data.get("summary","")).strip()
+        country=str(data.get("country","")).strip()
+        if not (category in OPPORTUNITY_CATEGORIES and 5<=len(title)<=160 and 20<=len(summary)<=1800 and len(country)<=80 and data.get("confirm_nonconfidential") is True):
+            return jsonify(error="invalid_fields"),400
+        with connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO partner_opportunities(application_id,category,title,summary,country)
+                    VALUES (%s,%s,%s,%s,%s) RETURNING id
+                """,(application_id,category,title,summary,country))
+                oid=cur.fetchone()["id"]
+                cur.execute("INSERT INTO activity_events(entity_type,entity_id,action) VALUES ('partner_opportunity',%s,'submitted')",(oid,))
+        return jsonify(status="submitted",reference=f"JBRO-O-{oid:06d}"),201
+    except Exception:
+        app.logger.exception("Partner opportunity operation failed")
+        return jsonify(error="temporarily_unavailable"),503
+
+@app.get("/api/admin/opportunities")
+def admin_opportunities():
+    if not authorized_admin():
+        return jsonify(error="unauthorized"),401
+    try:
+        with connection() as conn:
+            rows=conn.execute("""
+               SELECT o.id,o.category,o.title,o.summary,o.country,o.status,o.created_at,
+                 a.organization,a.email,a.id AS application_id
+               FROM partner_opportunities o
+               JOIN partner_applications a ON a.id=o.application_id
+               ORDER BY o.created_at DESC LIMIT 100
+            """).fetchall()
+        for row in rows:
+            row["created_at"]=row["created_at"].isoformat()
+        return jsonify(opportunities=rows)
+    except Exception:
+        return jsonify(error="temporarily_unavailable"),503
+
+@app.patch("/api/admin/opportunities/<int:opportunity_id>")
+def review_opportunity(opportunity_id):
+    if not authorized_admin():
+        return jsonify(error="unauthorized"),401
+    body=request.get_json(silent=True)
+    status=body.get("status") if isinstance(body,dict) else None
+    if status not in ("submitted","reviewing","qualified","closed","rejected"):
+        return jsonify(error="invalid_status"),400
+    try:
+        with connection() as conn:
+            with conn.cursor() as cur:
+                row=cur.execute("UPDATE partner_opportunities SET status=%s WHERE id=%s RETURNING id",(status,opportunity_id)).fetchone()
+                if not row:
+                    return jsonify(error="not_found"),404
+                cur.execute("INSERT INTO activity_events(entity_type,entity_id,action) VALUES ('partner_opportunity',%s,%s)",(opportunity_id,status))
+        return jsonify(id=opportunity_id,status=status)
     except Exception:
         return jsonify(error="temporarily_unavailable"),503
 
