@@ -1,5 +1,8 @@
 import copy
 import unittest
+import pathlib
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from validate_evidence import validate
 
 RECORD = dict(customer='Curious Korea',prompt='Find Korea DMC',answer='An actual response text',provider='OpenAI Responses API / web_search',model='gpt-6-luna',observed_at='2026-11-16T01:00:00+00:00',collection_method='api_auto_capture',recommended='unreviewed',citation_urls=['https://example.org'],session_id='resp_test',observed_web_search_calls=1)
