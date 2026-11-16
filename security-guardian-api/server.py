@@ -7,7 +7,7 @@ ORIGIN = "https://jbro-security-guardian.onrender.com"
 RATE = {}
 LOCK = threading.Lock()
 ACTIVE = threading.BoundedSemaphore(8)
-FUNNEL = {key:0 for key in ("page_view","scan_start","dns_complete","https_complete","https_error","report_download","consult_click")}
+FUNNEL = {key:0 for key in ("page_view","scan_start","dns_complete","https_complete","https_error","report_download_click","consult_click")}
 FUNNEL_LOCK = threading.Lock()
 HOST_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 MAX_HEADER_BYTES=16384
