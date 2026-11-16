@@ -68,7 +68,7 @@ function render(){
    card.append(ops);cards.append(card);
  }
 }
-async function refresh(){const [data,opps]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);}
+async function refresh(){const [data,opps,missions,claims]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);}
 function renderOpportunities(items){
  const root=$('opportunity-cards');root.replaceChildren();
  $('opportunity-message').textContent=items.length+' opportunity submissions';
@@ -97,6 +97,43 @@ function renderOpportunities(items){
  }
 }
 
+function renderQuestAdmin(missions,claims){
+ const msg=$('quest-admin-message'),mr=$('quest-admin-missions'),cr=$('quest-admin-claims');
+ mr.replaceChildren();cr.replaceChildren();
+ if(!missions.length)mr.append(make('div','empty','No missions created.'));
+ for(const m of missions){
+   const card=make('article','application');card.append(make('div','id','Mission '+m.id+' · '+m.category+' · '+m.reward_xp+' XP · '+m.state),make('h2','',m.title),make('p','summarytext',m.description));
+   for(const state of ['draft','open','closed']){
+     if(m.state===state)continue;
+     const button=make('button',state==='closed'?'quiet':'',state==='open'?'Publish mission':state==='closed'?'Close mission':'Return to draft');
+     button.addEventListener('click',async()=>{
+       if(!confirm('Change mission '+m.id+' to '+state+'?'))return;
+       button.disabled=true;
+       try{await api('/api/admin/tradequest/missions/'+m.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})});await refresh();}
+       catch(e){msg.textContent=e.message}finally{button.disabled=false}
+     });card.append(button);
+   }mr.append(card);
+ }
+ if(!claims.length)cr.append(make('div','empty','No mission contributions yet.'));
+ for(const claim of claims){
+   const card=make('article','application');card.append(make('div','id','Claim '+claim.id+' · '+claim.state),make('h2','',claim.title),make('div','details',claim.organization+' · '+claim.reward_xp+' XP'),make('p','summarytext',claim.contribution));
+   if(claim.state==='pending')for(const state of ['verified','rejected']){
+     const button=make('button',state==='rejected'?'quiet':'',state==='verified'?'Verify and award XP':'Reject claim');
+     button.addEventListener('click',async()=>{
+       if(!confirm(state==='verified'?'Verify this contribution and credit XP?':'Reject this contribution?'))return;
+       button.disabled=true;
+       try{await api('/api/admin/tradequest/claims/'+claim.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})});await refresh();}
+       catch(e){msg.textContent=e.message}finally{button.disabled=false}
+     });card.append(button);
+   }cr.append(card);
+ }
+}
+$('quest-create').addEventListener('submit',async e=>{
+ e.preventDefault();const b=$('quest-create').querySelector('button');b.disabled=true;
+ try{await api('/api/admin/tradequest/missions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('quest-title').value.trim(),description:$('quest-desc').value.trim(),category:$('quest-category').value,reward_xp:Number($('quest-reward').value)})});$('quest-create').reset();$('quest-admin-message').textContent='Draft mission created. Publish explicitly when ready.';await refresh();}
+ catch(err){$('quest-admin-message').textContent='Create failed: '+err.message}
+ finally{b.disabled=false}
+});
 $('login-form').addEventListener('submit',async e=>{
  e.preventDefault();token=$('token').value.trim();loginMessage.textContent='Verifying access...';
  try{await refresh();$('token').value='';login.hidden=true;dashboard.hidden=false;loginMessage.textContent='';}catch(err){showLogin(err.message);}
