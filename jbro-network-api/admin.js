@@ -168,7 +168,7 @@ function renderRewards(deals){
       {key:'allocation_pct',label:'Percentage of reward pool',type:'number',min:'1',max:'100'},
       {key:'agreement_reference',label:'Individual written terms reference'}
     ],v=>api('/api/admin/rewards/'+d.id+'/contributors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({application_id:Number(v.application_id),role:v.role,allocation_pct:Number(v.allocation_pct),agreement_reference:v.agreement_reference})}),'Add this contributor and allocation?');
-    control('Record agreement as signed',[{key:'signed_reference',label:'Signed reward agreement / evidence reference'}],v=>api('/api/admin/rewards/'+d.id+'/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}),'Confirm that all participants have signed the relevant agreement and allocations total 100%?');
+    const guide=make('p','','To sign this reward deal, issue and review participant contracts in the Platform Contract Signing section below. All parties must accept before finalization.');card.append(guide);
   }
   if(d.status==='signed' && !d.contributors.some(c=>c.settlement_status)){
     control('Record received commission',[{key:'amount_won',label:'Actual JBRO commission received (KRW)',type:'number',min:'1'},{key:'bank_reference',label:'Verifiable bank receipt reference'}],v=>api('/api/admin/rewards/'+d.id+'/receipts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...v,amount_won:Number(v.amount_won),confirm_bank_received:true})}),'Confirm bank statement proves JBRO received this commission?');
@@ -183,6 +183,47 @@ function renderRewards(deals){
   root.append(card);
  }
 }
+async function loadContracts(dealId){
+ const root=$('contract-admin-list'),status=$('contract-admin-status');root.replaceChildren();
+ const data=await api('/api/admin/rewards/'+dealId+'/contracts');
+ const contracts=data.contracts||[];
+ status.textContent=contracts.length+' agreement(s) on reward deal '+dealId;
+ if(!contracts.length){
+   const info=make('p','', 'Add approved participants with allocations totaling 100%, then issue each frozen individual agreement.');
+   const issue=make('button','','Issue immutable participation agreements');
+   issue.type='button';issue.addEventListener('click',async()=>{
+     if(!confirm('Confirm counsel reviewed all terms, participating entities and applicable law before issuing agreements?'))return;
+     issue.disabled=true;try{await api('/api/admin/rewards/'+dealId+'/contracts/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_legal_terms_reviewed:true})});await loadContracts(dealId);await refresh();}
+     catch(e){status.textContent='Issue failed: '+e.message}finally{issue.disabled=false}
+   });root.append(info,issue);return;
+ }
+ for(const d of contracts){
+   const c=make('article','application');
+   c.append(make('h2','',d.organization+' · '+d.role),make('div','id','Agreement '+d.id+' v'+d.version+' · '+d.status));
+   c.append(make('p','', 'SHA-256: '+d.agreement_sha256),make('p','', 'Partner: '+(d.partner_signed?'Accepted':'Awaiting acceptance')+' · JBRO: '+(d.jbro_signed?'Accepted':'Awaiting countersign')));
+   const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#f4f6f4;padding:12px;border-radius:8px';pre.textContent=JSON.stringify(JSON.parse(d.agreement_text),null,2);c.append(pre);
+   if(!d.jbro_signed){
+     const form=make('form','');const lab=make('label','','Authorized JBRO representative (full name)');
+     const input=document.createElement('input');input.required=true;input.minLength=2;input.maxLength=120;lab.append(input);
+     const ck=make('label','check');const tick=document.createElement('input');tick.type='checkbox';tick.required=true;ck.append(tick,document.createTextNode(' I have authority to represent JBRO and accept the exact document shown above.'));
+     const button=make('button','','Countersign on behalf of JBRO');button.type='submit';form.append(lab,ck,button);
+     form.addEventListener('submit',async e=>{e.preventDefault();if(!form.reportValidity())return;if(!confirm('This records your affirmative acceptance of this exact SHA-256 agreement. Continue?'))return;button.disabled=true;
+       try{await api('/api/admin/contracts/'+d.id+'/countersign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({representative:input.value.trim(),document_sha256:d.agreement_sha256,confirm_company_authority:true,confirm_read_and_accept:true})});await loadContracts(dealId);}
+       catch(err){status.textContent='Signing failed: '+err.message}finally{button.disabled=false}
+     });c.append(form);
+   }
+   root.append(c);
+ }
+ if(contracts.every(c=>c.partner_signed&&c.jbro_signed)){
+   const button=make('button','','Finalize all signed agreements and activate reward terms');
+   button.type='button';button.addEventListener('click',async()=>{
+     if(!confirm('Verify signatory authority, company registration, legal jurisdiction and all participants before finalizing?'))return;
+     button.disabled=true;try{await api('/api/admin/rewards/'+dealId+'/contracts/finalize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_all_party_authority_checked:true})});status.textContent='Reward deal marked signed. No money transferred.';await refresh();await loadContracts(dealId);}
+     catch(e){status.textContent='Finalization failed: '+e.message}finally{button.disabled=false}
+   });root.append(button);
+ }
+}
+$('contract-lookup').addEventListener('submit',async e=>{e.preventDefault();try{await loadContracts(Number($('contract-deal-id').value))}catch(err){$('contract-admin-status').textContent=err.message}});
 $('reward-create').addEventListener('submit',async e=>{
  e.preventDefault();const b=$('reward-create').querySelector('button[type=submit]');b.disabled=true;
  try{await api('/api/admin/rewards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:$('reward-title').value.trim(),deal_value_won:Number($('reward-value').value),reward_share_pct:Number($('reward-share').value)})});$('reward-create').reset();$('reward-message').textContent='Draft created; does not establish a contractual obligation.';await refresh();}
