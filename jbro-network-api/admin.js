@@ -68,7 +68,23 @@ function render(){
    card.append(ops);cards.append(card);
  }
 }
-async function refresh(){const [data,opps,missions,claims,rewards,sales]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);}
+async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);}
+function renderGMVKpis(data){
+ const root=$('gmv-kpis');root.replaceChildren();
+ const fmt=(v,cur)=>new Intl.NumberFormat('en-US',{style:'currency',currency:cur,maximumFractionDigits:cur==='KRW'?0:2}).format(Number(v)/(cur==='USD'?100:1));
+ for(const cur of ['USD','KRW']){
+   const k=(data.currencies||{})[cur]||{};
+   const entries=[
+     ['Completed GMV ('+cur+')',fmt(k.completed_gmv_minor||0,cur)],
+     ['Signed pipeline ('+cur+')',fmt(k.signed_gmv_minor||0,cur)],
+     ['Completed / signed deals',String(k.completed_deals||0)+' / '+String(k.signed_deals||0)],
+     ['Recorded commission ('+cur+')',fmt(k.recorded_commission_minor||0,cur)]
+   ];
+   for(const [label,value] of entries){const cell=make('div');cell.append(make('strong','',value),make('span','',label));root.append(cell);}
+ }
+ const counts=data.counts||{};
+ $('gmv-kpi-note').textContent='Approved partners: '+(counts.approved_partners||0)+' · Qualified opportunities: '+(counts.qualified_opportunities||0)+' · Draft rooms: '+(counts.draft_rooms||0)+' · FIRST10K coupons: '+(counts.first10k_coupons||0)+'. Amounts are lifetime and use original currency; commission entries require bank reconciliation.';
+}
 function renderOpportunities(items){
  const root=$('opportunity-cards');root.replaceChildren();
  $('opportunity-message').textContent=items.length+' opportunity submissions';
