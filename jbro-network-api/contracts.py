@@ -249,3 +249,104 @@ def finalize(deal_id):
         return jsonify(status="signed",contract_count=len(rows),bundle_sha256=bundle_hash),200
     except Exception:
         log.exception("Platform contract finalization failed");return failure("temporarily_unavailable",503)
+
+
+def smoke_test(app, admin_token, origin):
+    """End-to-end: frozen docs, partner isolation, bilateral assent, finalization and cleanup."""
+    import secrets
+    nonce=secrets.token_hex(7)
+    client=app.test_client()
+    admin={"Authorization":"Bearer "+admin_token}
+    aids=[];keys=[];deal_id=None
+    try:
+        for idx in range(2):
+            res=client.post("/api/partner-applications",json={
+                "organization":"JBRO_CONTRACT_TEST_"+nonce+"_"+str(idx),
+                "email":"contract-"+nonce+"-"+str(idx)+"@example.invalid",
+                "country":"Test","role":"Service partner",
+                "summary":"Synthetic QA contact only; no binding real commitment.","consent":True
+            },headers={"Origin":origin})
+            assert res.status_code==201,("intake",res.status_code)
+            aid=int(res.get_json()["reference"].split("-")[-1]);aids.append(aid)
+            assert client.patch("/api/admin/applications/"+str(aid),headers=admin,json={"status":"approved"}).status_code==200
+            invite=client.post("/api/admin/applications/"+str(aid)+"/issue-access",headers=admin)
+            assert invite.status_code==200
+            keys.append(invite.get_json()["access_token"])
+        d=client.post("/api/admin/rewards",headers=admin,json={"title":"Synthetic platform signing "+nonce,
+               "deal_value_won":100000000,"reward_share_pct":30})
+        assert d.status_code==201,("create",d.status_code);deal_id=d.get_json()["deal_id"]
+        for index in range(2):
+            r=client.post("/api/admin/rewards/"+str(deal_id)+"/contributors",headers=admin,json={
+                "application_id":aids[index],"allocation_pct":50,"role":"buyer_introduction" if index==0 else "supplier_introduction",
+                "agreement_reference":"QA-AGREEMENT-"+nonce+"-"+str(index)})
+            assert r.status_code==201,("contributor",r.status_code)
+        assert client.post("/api/admin/rewards/"+str(deal_id)+"/sign",headers=admin,json={"signed_reference":"legacy-test"}).status_code==409
+        issued=client.post("/api/admin/rewards/"+str(deal_id)+"/contracts/issue",headers=admin,json={"confirm_legal_terms_reviewed":True})
+        assert issued.status_code==201 and issued.get_json()["contracts_count"]==2,("issue",issued.status_code)
+        again=client.post("/api/admin/rewards/"+str(deal_id)+"/contracts/issue",headers=admin,json={"confirm_legal_terms_reviewed":True})
+        assert again.status_code==409,"duplicate contracts"
+        rejected_add=client.post("/api/admin/rewards/"+str(deal_id)+"/contributors",headers=admin,json={
+             "application_id":aids[0],"allocation_pct":1,"role":"execution","agreement_reference":"QA-BYPASS-"+nonce})
+        assert rejected_add.status_code==409,"post-issue allocation mutation"
+        before=client.post("/api/admin/rewards/"+str(deal_id)+"/contracts/finalize",headers=admin,json={"confirm_all_party_authority_checked":True})
+        assert before.status_code==409,"finalized before signatures"
+        for idx in range(2):
+            own=client.get("/api/partner/contracts",headers={"Authorization":"Bearer "+keys[idx]})
+            assert own.status_code==200
+            docs=own.get_json()["contracts"]
+            assert len(docs)==1,("partner isolation",idx,len(docs))
+            doc=docs[0]
+            assert hashlib.sha256(doc["agreement_text"].encode()).hexdigest()==doc["agreement_sha256"]
+            unauthorized=client.post("/api/partner/contracts/"+str(doc["id"])+"/accept",
+                headers={"Authorization":"Bearer "+keys[1-idx]},
+                json={"representative":"Other Partner QA","document_sha256":doc["agreement_sha256"],
+                      "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+            assert unauthorized.status_code==404,("other partner sign",unauthorized.status_code)
+            bad=client.post("/api/partner/contracts/"+str(doc["id"])+"/accept",
+                headers={"Authorization":"Bearer "+keys[idx]},
+                json={"representative":"Test Officer","document_sha256":"0"*64,
+                      "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+            assert bad.status_code==409,"wrong document hash accepted"
+            ok=client.post("/api/partner/contracts/"+str(doc["id"])+"/accept",
+                headers={"Authorization":"Bearer "+keys[idx]},
+                json={"representative":"Test Officer","document_sha256":doc["agreement_sha256"],
+                      "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+            assert ok.status_code==200,("partner signed",ok.status_code)
+            duplicate=client.post("/api/partner/contracts/"+str(doc["id"])+"/accept",
+                headers={"Authorization":"Bearer "+keys[idx]},
+                json={"representative":"Test Officer","document_sha256":doc["agreement_sha256"],
+                      "confirm_authorized_signatory":True,"confirm_read_and_accept":True})
+            assert duplicate.status_code==409,"duplicate assent"
+            signed=client.post("/api/admin/contracts/"+str(doc["id"])+"/countersign",headers=admin,json={
+                 "representative":"Authorized JBRO QA","document_sha256":doc["agreement_sha256"],
+                 "confirm_company_authority":True,"confirm_read_and_accept":True})
+            assert signed.status_code==200 and signed.get_json()["status"]=="fully_signed",("countersign",signed.status_code)
+        assert client.get("/api/partner/contracts").status_code==401
+        finalized=client.post("/api/admin/rewards/"+str(deal_id)+"/contracts/finalize",headers=admin,json={"confirm_all_party_authority_checked":True})
+        assert finalized.status_code==200 and finalized.get_json()["contract_count"]==2,("finalize",finalized.status_code)
+        second=client.post("/api/admin/rewards/"+str(deal_id)+"/contracts/finalize",headers=admin,json={"confirm_all_party_authority_checked":True})
+        assert second.status_code==409,"double finalization"
+        payout=client.post("/api/admin/rewards/"+str(deal_id)+"/approve-settlements",headers=admin,json={"confirm_compliance_review":True})
+        assert payout.status_code==409,"allowed settlement without paid commission"
+        log.info("JBRO_PLATFORM_CONTRACT_SMOKE_PASS")
+    finally:
+        with DB() as conn:
+            with conn.cursor() as cur:
+                if deal_id is not None:
+                    row=cur.execute("SELECT id FROM reward_deals WHERE id=%s AND title=%s",
+                       (deal_id,"Synthetic platform signing "+nonce)).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM reward_contract_assents WHERE contract_id IN (SELECT id FROM reward_contracts WHERE deal_id=%s)",(deal_id,))
+                        cur.execute("DELETE FROM reward_contracts WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_audit WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_settlements WHERE contributor_id IN (SELECT id FROM reward_contributors WHERE deal_id=%s)",(deal_id,))
+                        cur.execute("DELETE FROM reward_receipts WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_contributors WHERE deal_id=%s",(deal_id,))
+                        cur.execute("DELETE FROM reward_deals WHERE id=%s",(deal_id,))
+                for aid in aids:
+                    row=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND organization LIKE %s",
+                       (aid,"JBRO_CONTRACT_TEST_"+nonce+"_%")).fetchone()
+                    if row:
+                        cur.execute("DELETE FROM partner_access WHERE application_id=%s",(aid,))
+                        cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
+                        cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
