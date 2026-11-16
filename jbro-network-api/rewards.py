@@ -125,6 +125,7 @@ def add_contributor(deal_id):
                 deal=cur.execute("SELECT status FROM reward_deals WHERE id=%s FOR UPDATE",(deal_id,)).fetchone()
                 if not deal:return err("not_found",404)
                 if deal["status"]!="draft":return err("agreement_locked",409)
+                if cur.execute("SELECT 1 FROM reward_contracts WHERE deal_id=%s LIMIT 1",(deal_id,)).fetchone():return err("contracts_already_issued",409)
                 verified=cur.execute("SELECT id FROM partner_applications WHERE id=%s AND status='approved'",(aid,)).fetchone()
                 if not verified:return err("partner_not_approved",409)
                 total=cur.execute("SELECT coalesce(sum(allocation_pct),0)::int AS total FROM reward_contributors WHERE deal_id=%s",(deal_id,)).fetchone()["total"]
@@ -140,22 +141,10 @@ def add_contributor(deal_id):
 
 @bp.post("/api/admin/rewards/<int:deal_id>/sign")
 def sign_deal(deal_id):
+    # Legacy admin-only attestation is no longer sufficient for new deal contracts.
+    # Use /contracts/issue -> each party acceptance -> /contracts/finalize.
     if not ADMIN():return err("unauthorized",401)
-    body=request.get_json(silent=True);ref=body.get("signed_reference") if isinstance(body,dict) else None
-    if not isinstance(ref,str) or not 4<=len(ref.strip())<=160:return err("signed_document_reference_required")
-    try:
-        with DB() as conn:
-            with conn.cursor() as cur:
-                row=cur.execute("SELECT status FROM reward_deals WHERE id=%s FOR UPDATE",(deal_id,)).fetchone()
-                if not row:return err("not_found",404)
-                if row["status"]!="draft":return err("already_signed",409)
-                total=cur.execute("SELECT coalesce(sum(allocation_pct),0)::int AS total FROM reward_contributors WHERE deal_id=%s",(deal_id,)).fetchone()["total"]
-                if total!=100:return err("allocations_must_total_100",409)
-                cur.execute("UPDATE reward_deals SET status='signed',signed_reference=%s,signed_at=now() WHERE id=%s",(ref.strip(),deal_id))
-                cur.execute("INSERT INTO reward_audit(deal_id,action,reference) VALUES (%s,'agreement_marked_signed',%s)",(deal_id,ref.strip()))
-        return jsonify(status="signed"),200
-    except Exception:
-        logger.exception("reward sign failed");return err("temporarily_unavailable",503)
+    return err("platform_contract_signatures_required",409)
 
 @bp.post("/api/admin/rewards/<int:deal_id>/receipts")
 def record_receipt(deal_id):
