@@ -34,7 +34,8 @@ for(const f of data.findings||[])result.append(makeLine(f));
 const n=document.createElement('p');n.className='fine';n.textContent=data.limitations||'';result.append(n);
 lastReport=data;
 reportBtn.hidden=false;
-}catch(e){status.textContent=e.name==='AbortError'?'HTTPS 서비스 응답시간을 초과했습니다. 다시 시도해 주세요.':'HTTPS 확인 불가: '+e.message;
+document.dispatchEvent(new CustomEvent('guardian:https-done'));
+}catch(e){document.dispatchEvent(new CustomEvent('guardian:https-error'));status.textContent=e.name==='AbortError'?'HTTPS 서비스 응답시간을 초과했습니다. 다시 시도해 주세요.':'HTTPS 확인 불가: '+e.message;
 }finally{clearTimeout(timer);}
 });
 document.addEventListener('guardian:dns-done',e=>{
