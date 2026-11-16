@@ -1,4 +1,4 @@
-"""JBRO FIRST10M fee coupon: waive the 2.5% fee on first KRW 10m of a first eligible deal.
+"""JBRO FIRST10M fee coupon: waive the 2.5% fee on first USD 10,000 of a first eligible deal.
 
 A coupon belongs to ONE approved fee-paying counterparty (buyer OR seller) and
 ONE linked draft Deal Room + Reward Deal; unique per application. No retroactivity.
@@ -12,9 +12,9 @@ bp=Blueprint("promotions",__name__)
 DB=ADMIN=PARTNER=None
 log=logging.getLogger(__name__)
 CODE="FIRST10M"
-CAP_VALUE_WON=10_000_000
+CAP_VALUE_USD_CENTS=1_000_000
 FEE_BPS=250
-MAX_DISCOUNT_WON=CAP_VALUE_WON*FEE_BPS//10000
+MAX_DISCOUNT_USD_CENTS=CAP_VALUE_USD_CENTS*FEE_BPS//10000
 
 def init(app,connection,admin_auth,partner_auth):
     global DB,ADMIN,PARTNER
@@ -33,17 +33,19 @@ def ensure_schema():
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             CONSTRAINT coupon_discount_valid CHECK(discount_won>0)
         )""")
+        # Legacy discount_won DB field stores minor currency units; USD campaigns use cents.
+        conn.execute("ALTER TABLE promo_fee_coupons ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'KRW' CHECK(currency IN ('KRW','USD'))")
 
 def discount(value):
-    return min(value,CAP_VALUE_WON)*FEE_BPS//10000
+    return min(value,CAP_VALUE_USD_CENTS)*FEE_BPS//10000
 
 def net_fee(value,discount_won):
     return max(0,value*FEE_BPS//10000-discount_won)
 
 @bp.get("/api/public/first-trade-coupon")
 def public_coupon():
-    return jsonify(code=CODE,first_deal_value_waived_won=CAP_VALUE_WON,
-        jbro_fee_bps=FEE_BPS,max_discount_won=MAX_DISCOUNT_WON,
+    return jsonify(code=CODE,currency="USD",first_deal_value_waived_usd_cents=CAP_VALUE_USD_CENTS,
+        jbro_fee_bps=FEE_BPS,max_discount_usd_cents=MAX_DISCOUNT_USD_CENTS,
         note="Pilot offer subject to eligibility and written JBRO approval. Only the agreed 2.5% JBRO fee stream for one first eligible buyer or seller transaction. No other-side fee relief. Not retroactive or stackable."),200
 
 @bp.post("/api/admin/rewards/<int:deal_id>/first-trade-coupon")
@@ -60,14 +62,18 @@ def assign_coupon(deal_id):
                 applicant=cur.execute("SELECT id,status FROM partner_applications WHERE id=%s FOR UPDATE",(aid,)).fetchone()
                 if not applicant or applicant["status"]!="approved":
                     return jsonify(error="approved_partner_required"),409
-                deal=cur.execute("""SELECT id,status,deal_value_won,fee_bps FROM reward_deals WHERE id=%s FOR UPDATE""",
+                deal=cur.execute("""SELECT id,status,deal_value_won,currency,fee_bps FROM reward_deals WHERE id=%s FOR UPDATE""",
                     (deal_id,)).fetchone()
                 if not deal or deal["status"]!="draft":
                     return jsonify(error="draft_reward_deal_required"),409
-                room=cur.execute("""SELECT id,status,buyer_application_id,seller_application_id
+                if deal["currency"]!="USD":
+                    return jsonify(error="usd_trade_required_for_first10m"),409
+                room=cur.execute("""SELECT id,status,currency,buyer_application_id,seller_application_id
                     FROM deal_rooms WHERE reward_deal_id=%s FOR UPDATE""",(deal_id,)).fetchone()
                 if not room or room["status"]!="draft":
                     return jsonify(error="linked_draft_sale_room_required"),409
+                if room["currency"]!="USD":
+                    return jsonify(error="usd_sale_contract_required"),409
                 if aid not in (room["buyer_application_id"],room["seller_application_id"]):
                     return jsonify(error="coupon_holder_must_be_counterparty"),409
                 if cur.execute("SELECT 1 FROM reward_contracts WHERE deal_id=%s LIMIT 1",(deal_id,)).fetchone():
@@ -83,13 +89,14 @@ def assign_coupon(deal_id):
                 amount=discount(deal["deal_value_won"])
                 if amount<1:return jsonify(error="invalid_discount"),400
                 row=cur.execute("""INSERT INTO promo_fee_coupons
-                    (application_id,reward_deal_id,deal_room_id,discount_won)
-                    VALUES (%s,%s,%s,%s) RETURNING id""",
+                    (application_id,reward_deal_id,deal_room_id,discount_won,currency)
+                    VALUES (%s,%s,%s,%s,'USD') RETURNING id""",
                     (aid,deal_id,room["id"],amount)).fetchone()
                 cur.execute("""INSERT INTO reward_audit(deal_id,action,reference)
                     VALUES(%s,'first_trade_coupon_issued',%s)""",(deal_id,CODE+":"+str(aid)))
         return jsonify(coupon_id=row["id"],campaign=CODE,
-           discount_won=amount,fee_after_discount_won=net_fee(deal["deal_value_won"],amount)),201
+           currency="USD",discount_usd_cents=amount,
+           fee_after_discount_usd_cents=net_fee(deal["deal_value_won"],amount)),201
     except Exception:
         log.exception("First-trade coupon issue failed")
         return jsonify(error="temporarily_unavailable"),503
@@ -100,18 +107,18 @@ def partner_coupon():
         aid=PARTNER()
         if aid is None:return jsonify(error="unauthorized"),401
         with DB() as conn:
-            row=conn.execute("""SELECT p.campaign,p.discount_won,p.deal_room_id,
+            row=conn.execute("""SELECT p.campaign,p.currency,p.discount_won AS discount_minor,p.deal_room_id,
               r.status AS reward_deal_status FROM promo_fee_coupons p
               JOIN reward_deals r ON r.id=p.reward_deal_id
               WHERE p.application_id=%s""",(aid,)).fetchone()
-        return jsonify(coupon=row,offer=CODE,max_discount_won=MAX_DISCOUNT_WON,
+        return jsonify(coupon=row,offer=CODE,currency="USD",max_discount_usd_cents=MAX_DISCOUNT_USD_CENTS,
             note="Subject to eligibility approval; no coupon is active until JBRO attaches it to an eligible draft Deal Room."),200
     except Exception:
         return jsonify(error="temporarily_unavailable"),503
 
 
 def smoke_test(app,admin_token,origin):
-    """Neon test: first KRW 10m fee waiver, partial waiver, partner isolation, fee cap."""
+    """Neon test: first USD 10k fee waiver, partial waiver, partner isolation, fee cap."""
     import secrets
     nonce=secrets.token_hex(7)
     client=app.test_client()
@@ -130,18 +137,18 @@ def smoke_test(app,admin_token,origin):
             invite=client.post("/api/admin/applications/"+str(aid)+"/issue-access",headers=admin)
             assert invite.status_code==200
             keys.append(invite.get_json()["access_token"])
-        assert client.get("/api/public/first-trade-coupon").get_json()["max_discount_won"]==250000
-        for i,value in enumerate((20_000_000,5_000_000)):
+        assert client.get("/api/public/first-trade-coupon").get_json()["max_discount_usd_cents"]==25000
+        for i,value in enumerate((2_000_000,500_000)):
             reward=client.post("/api/admin/rewards",headers=admin,json={
                 "title":"Synthetic FIRST10M fee waiver "+nonce+" "+str(i),
-                "deal_value_won":value,"reward_share_pct":30})
+                "currency":"USD","deal_value_minor":value,"reward_share_pct":30})
             assert reward.status_code==201,("reward create",reward.status_code)
             deal_id=reward.get_json()["deal_id"];deals.append(deal_id)
             terms={
              "buyer_legal_name":"Synthetic Coupon Buyer Company",
              "seller_legal_name":"Synthetic Verified Seller Company",
              "item_description":"Fictional industrial processing module sample, not real inventory or a real order.",
-             "quantity_unit":"10 pieces","total_contract_value_won":value,
+             "quantity_unit":"10 pieces","currency":"USD","total_contract_value_minor":value,
              "delivery_terms":"Synthetic warehouse in South Korea, no actual shipment.",
              "inspection_terms":"Simulation-only inspection conditions without physical goods.",
              "payment_terms":"Test-only bank terms with no real funds exchanged.",
@@ -158,23 +165,23 @@ def smoke_test(app,admin_token,origin):
             issued=client.post("/api/admin/rewards/"+str(deal_id)+"/first-trade-coupon",
                 headers=admin,json={"application_id":aids[i],"confirm_eligibility_and_fee_terms":True})
             assert issued.status_code==201,("coupon issue",issued.status_code)
-            expected=250000 if i==0 else 125000
-            assert issued.get_json()["discount_won"]==expected
-            assert issued.get_json()["fee_after_discount_won"]==(250000 if i==0 else 0)
+            expected=25000 if i==0 else 12500
+            assert issued.get_json()["discount_usd_cents"]==expected
+            assert issued.get_json()["fee_after_discount_usd_cents"]==(25000 if i==0 else 0)
             dup=client.post("/api/admin/rewards/"+str(deal_id)+"/first-trade-coupon",headers=admin,
                 json={"application_id":aids[i],"confirm_eligibility_and_fee_terms":True})
             assert dup.status_code==409,"duplicate coupon"
             exposed=client.get("/api/partner/first-trade-coupon",headers={"Authorization":"Bearer "+keys[i]})
-            assert exposed.status_code==200 and exposed.get_json()["coupon"]["discount_won"]==expected
+            assert exposed.status_code==200 and exposed.get_json()["coupon"]["discount_minor"]==expected
             other=client.get("/api/partner/first-trade-coupon",headers={"Authorization":"Bearer "+keys[1-i]})
             if i==0:assert other.status_code==200 and other.get_json()["coupon"] is None
         listed=client.get("/api/admin/rewards",headers=admin)
         assert listed.status_code==200
         byid={d["id"]:d for d in listed.get_json()["deals"]}
-        assert byid[deals[0]]["commission_ceiling_won"]==250000
-        assert byid[deals[0]]["gross_commission_won"]==500000
-        assert byid[deals[0]]["coupon_discount_won"]==250000
-        assert byid[deals[1]]["commission_ceiling_won"]==0
+        assert byid[deals[0]]["commission_ceiling_minor"]==25000
+        assert byid[deals[0]]["gross_commission_minor"]==50000
+        assert byid[deals[0]]["coupon_discount_minor"]==25000
+        assert byid[deals[1]]["commission_ceiling_minor"]==0
         # Attach participating parties and fully countersign both the sale and reward documents
         deal_id=deals[0];room_id=rooms[0]
         for i in (0,2):
@@ -189,8 +196,8 @@ def smoke_test(app,admin_token,origin):
         assert len(docs)==2
         for doc in docs:
             parsed=json.loads(doc["agreement_text"])
-            assert parsed["transaction"]["first_trade_discount_won"]==250000
-            assert parsed["transaction"]["max_collectible_fee_won"]==250000
+            assert parsed["transaction"]["first_trade_discount_minor"]==25000
+            assert parsed["transaction"]["max_collectible_fee_minor"]==25000
             i=aids.index(doc["application_id"])
             signed=client.post("/api/partner/contracts/"+str(doc["id"])+"/accept",
                 headers={"Authorization":"Bearer "+keys[i]},json={
@@ -216,17 +223,17 @@ def smoke_test(app,admin_token,origin):
             headers=admin,json={"confirm_all_party_authority_checked":True})
         assert final.status_code==200,("reward finalize",final.status_code)
         exceeded=client.post("/api/admin/rewards/"+str(deal_id)+"/receipts",
-            headers=admin,json={"amount_won":250001,
+            headers=admin,json={"currency":"USD","amount_minor":25001,
               "bank_reference":"QA-OVER-"+nonce,"confirm_bank_received":True})
         assert exceeded.status_code==409,"fee cap ignored"
         receipt=client.post("/api/admin/rewards/"+str(deal_id)+"/receipts",
-            headers=admin,json={"amount_won":250000,
+            headers=admin,json={"currency":"USD","amount_minor":25000,
               "bank_reference":"QA-VALID-"+nonce,"confirm_bank_received":True})
         assert receipt.status_code==201,("net fee receipt",receipt.status_code)
         detail=client.get("/api/admin/rewards",headers=admin).get_json()["deals"]
         item=next(x for x in detail if x["id"]==deal_id)
-        assert (item["commission_received_won"],item["reward_pool_won"],
-                item["jbro_retained_before_costs_won"])==(250000,75000,175000)
+        assert (item["commission_received_minor"],item["reward_pool_minor"],
+                item["jbro_retained_before_costs_minor"])==(25000,7500,17500)
         assert client.get("/api/admin/rewards").status_code==401
         log.info("JBRO_FIRST10M_SMOKE_PASS")
     finally:
