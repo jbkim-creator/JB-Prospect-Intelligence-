@@ -1,3 +1,15 @@
+## CURRENT CAMPAIGN — FIRST10K USD (supersedes prior KRW FIRST10M) — 2026-11-16
+
+**Do not use the older FIRST10M KRW terms below for any new offers.** Active global campaign is **FIRST10K**:
+- First **US$10,000** of ONE approved eligible USD-denominated first trade: waive the specified JBRO 2.5% fee stream; maximum discount **US$250**. Only amount above US$10,000 retains normal commission. An approved buyer OR supplier is the one fee-paying beneficiary; there is no automatic discount on the other party's fee.
+- USD transaction principal, cash commission receipts, fee discount and reward settlement use **integer USD cents**; no automatic exchange-rate conversion. Legacy KRW deals retain integer won. Due to backward compatibility, some original schema column names are `deal_value_won`, `discount_won` or `approved_won`, but read `currency` before interpreting them. New-facing API aliases use `*_minor` and `currency='USD'`.
+- Neon migration adds `reward_deals.currency`, `deal_rooms.currency`, `promo_fee_coupons.currency` and permits historic `FIRST10M` / new `FIRST10K` campaign codes. Issuer only allows USD deal currency, matching sale/commission, still draft, qualified payer and first trade; add-on discounts are frozen into agreement before signature.
+- New public interest tag is `[FIRST10K coupon request]`; related weekday Gmail/Neon follow-up automation has been updated. Already-prepared follow-up Gmail drafts were revised in place without sending.
+- Active campaign assets: `jbro-global-network/FIRST10K_CAMPAIGN.md`. Historical `FIRST10M_CAMPAIGN.md` is superseded.
+- To activate tests temporarily, set `JBRO_FIRST10K_SMOKE_TEST=1` and restore to `0` after the real Neon test passes. No real coupons, signed deals or disbursements are created by test logic.
+
+---
+
 ## FIRST10M first-trade commission waiver — 2026-11-16
 
 Active campaign landing page: https://jbro-global-network.onrender.com/#first-trade-offer
