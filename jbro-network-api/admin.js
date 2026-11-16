@@ -224,6 +224,36 @@ async function loadContracts(dealId){
  }
 }
 $('contract-lookup').addEventListener('submit',async e=>{e.preventDefault();try{await loadContracts(Number($('contract-deal-id').value))}catch(err){$('contract-admin-status').textContent=err.message}});
+function saveContractRecord(filename, data) {
+ const file=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(file);const link=document.createElement('a');
+ link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function showExecutionAdmin(roomId,container,message){
+ container.replaceChildren();
+ const data=await api('/api/admin/deal-rooms/'+roomId+'/execution');
+ if(!data.events.length){container.append(make('p','','No execution evidence recorded yet.'));return}
+ for(const item of data.events){
+   const box=make('div','application');
+   box.append(make('div','id',item.stage+' · '+item.status+' · Event '+item.id),
+      make('p','',item.organization+' · '+item.evidence_reference),make('p','summarytext',item.note));
+   if(item.status==='submitted')for(const newStatus of ['verified','rejected']){
+     const button=make('button',newStatus==='rejected'?'quiet':'',newStatus==='verified'?'Verify evidence':'Reject evidence');
+     button.type='button';button.addEventListener('click',async()=>{
+       if(!confirm('Have you reviewed the independent documents behind this evidence reference? Record status '+newStatus+'?'))return;
+       button.disabled=true;
+       try{await api('/api/admin/deal-rooms/'+roomId+'/execution/'+item.id,{
+         method:'PATCH',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({status:newStatus,confirm_reviewed_evidence:true})});
+         message.textContent='Evidence review saved. This records a status, not a banking or logistics certification.';
+         await showExecutionAdmin(roomId,container,message);
+       }catch(err){message.textContent=err.message}finally{button.disabled=false}
+     });box.append(button);
+   }
+   container.append(box);
+ }
+}
 function renderSales(rooms){
  const root=$('sale-admin-rooms'),msg=$('sale-admin-status');root.replaceChildren();
  if(!rooms.length){root.append(make('div','empty','No buyer–seller deals created yet.'));return}
@@ -244,6 +274,22 @@ function renderSales(rooms){
     try{await api('/api/admin/deal-rooms/'+room.id+'/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_sale_terms_legal_review:true})});msg.textContent='Agreement issued to both approved counterparties.';await refresh();}
     catch(err){msg.textContent='Not issued: '+err.message}finally{btn.disabled=false}
    });c.append(btn);
+  }
+  if(doc){
+   const btn=make('button','quiet','Download frozen contract record (JSON)');
+   btn.type='button';btn.addEventListener('click',async()=>{
+      try{const bundle=await api('/api/admin/deal-rooms/'+room.id+'/contract-export');saveContractRecord('JBRO-Deal-'+room.id+'-contract-record.json',bundle)}
+      catch(err){msg.textContent='Download unavailable: '+err.message}
+   });c.append(btn);
+  }
+  if(room.status==='signed'){
+    const btn=make('button','quiet','View & review execution evidence');btn.type='button';
+    const slot=make('div',''),status=make('p','','');
+    btn.addEventListener('click',async()=>{
+      try{await showExecutionAdmin(room.id,slot,status)}
+      catch(err){status.textContent='Unable to load execution: '+err.message}
+    });
+    c.append(btn,status,slot);
   }
   root.append(c);
  }
