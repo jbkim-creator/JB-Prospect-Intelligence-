@@ -465,9 +465,14 @@ def partner_smoke_test():
                         cur.execute("DELETE FROM activity_events WHERE entity_type='partner_application' AND entity_id=%s",(aid,))
                         cur.execute("DELETE FROM partner_applications WHERE id=%s",(aid,))
 
+# Bind TradeQuest APIs to existing explicit admin / partner authorization.
+import tradequest
+tradequest.init(app, connection, authorized_admin, authorized_partner_id)
+
 # Check real database connectivity once per worker startup. No secrets or records in logs.
 try:
     setup_db()
+    tradequest.ensure_schema()
     app.logger.info("JBRO_NEON_DB_STARTUP_READY")
     if os.getenv("JBRO_SMOKE_TEST") == "1":
         smoke_test()
