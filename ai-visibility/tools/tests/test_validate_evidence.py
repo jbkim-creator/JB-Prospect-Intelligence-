@@ -15,10 +15,16 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(any('web_search_call' in e for e in validate(dict(schema='jbro-ai-visibility-evidence-v1',records=[x]))))
     def test_fake_recommendation_without_review(self):
         x=copy.deepcopy(RECORD); x['recommended']='yes'
-        self.assertTrue(any('unreviewed' in e for e in validate(dict(schema='jbro-ai-visibility-evidence-v1',records=[x]))))
+        self.assertTrue(any('reviewer_name' in e for e in validate(dict(schema='jbro-ai-visibility-evidence-v1',records=[x]))))
     def test_incomplete_web_search(self):
         x=copy.deepcopy(RECORD);x['web_search_statuses']=['in_progress']
         self.assertTrue(any('no completed' in e for e in validate(dict(schema='jbro-ai-visibility-evidence-v1',records=[x]))))
+    def test_human_reviewed_api_record_is_valid(self):
+        x=copy.deepcopy(RECORD)
+        x['recommended']='yes'
+        x['reviewer_name']='QA'
+        x['reviewed_at']='2026-11-16T01:00:00+00:00'
+        self.assertEqual(validate(dict(schema='jbro-ai-visibility-evidence-v1',records=[x])),[])
     def test_duplicate(self):
         x=dict(schema='jbro-ai-visibility-evidence-v1',records=[RECORD,copy.deepcopy(RECORD)])
         self.assertTrue(any('duplicate' in e for e in validate(x)))
