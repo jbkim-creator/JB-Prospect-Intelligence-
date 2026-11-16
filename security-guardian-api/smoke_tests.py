@@ -43,6 +43,17 @@ def run(app):
             ips = ["8.8.%d.%d" % (i//256,i%256) for i in range(21)]
             with patch.object(app.socket, "getaddrinfo", return_value=self.fake(ips)):
                 with self.assertRaises(ValueError):app.inspect_host("example.com")
+        def test_hsts_positive_age_parsing(self):
+            import re
+            expr=r"(?:^|;)\s*max-age\s*=\s*(\d+)"
+            self.assertEqual(int(re.search(expr,"max-age=31536000; includeSubDomains",re.I).group(1)),31536000)
+        def test_hsts_disabled_age_parsing(self):
+            import re
+            expr=r"(?:^|;)\s*max-age\s*=\s*(\d+)"
+            self.assertEqual(int(re.search(expr,"max-age=0",re.I).group(1)),0)
+        def test_analytics_whitelist(self):
+            self.assertIn("scan_start",app.FUNNEL)
+            self.assertNotIn("domain",app.FUNNEL)
         def test_prefer_ipv4(self):
             with patch.object(app.socket, "getaddrinfo", return_value=self.fake(["2606:4700:4700::1111","1.1.1.1"])):
                 self.assertEqual(app.inspect_host("example.com")[0],"1.1.1.1")
