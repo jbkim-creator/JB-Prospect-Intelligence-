@@ -57,3 +57,16 @@ https://developers.openai.com/api/docs/guides/tools-web-search
 
 ## Engineering constraints
 This is a local CLI, not a publicly exposed endpoint. The Render static website cannot safely hold provider credentials or independently run paid AI API workflows. For fully automatic scheduling, a secured backend, provider secret store, customer access controls, billing approvals, and audit logs are prerequisites.
+
+## On-demand GitHub Actions pilot (no credentials in the repo)
+
+An isolated manual workflow lives at `.github/workflows/ai-visibility-pilot.yml` on the feature branch.
+
+- Default manual input is `execute_paid_calls: false`, which runs offline tests and a dry run only.
+- Billable execution requires the operator to select true, choose 1 or 3 requests, and separately store `OPENAI_API_KEY` as an Actions repository secret.
+- The workflow never runs on a schedule or on a code push.
+- Evidence artifact retention is one day; the artifact is not placed into the repository or public static site.
+- GitHub's workflow_dispatch UI generally requires the workflow to exist on the default branch; it may not be available from this feature branch until an authorized merge or an isolated default-branch workflow addition.
+- Before any billable run, configure a provider-side usage limit and confirm GitHub Actions artifact access controls.
+
+This workflow does not bypass API authentication and is not evidence of a paid API call having run.
