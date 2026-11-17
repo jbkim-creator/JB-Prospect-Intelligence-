@@ -1,16 +1,37 @@
-/* JBRO analytics adapter. No transmission until a GA4 measurement ID is configured. */
+/* JBRO analytics adapter. GA4 analytics with optional visitor consent. */
 (function(){
-const id=window.JBRO_GA4_ID || '';
+const id='G-F0EZXJ8M8M';
 window.dataLayer=window.dataLayer||[];
 window.jbroTrack=function(name,params){
  const event={event:name,...(params||{}),page_path:location.pathname,utm_source:new URLSearchParams(location.search).get('utm_source')||'',utm_content:new URLSearchParams(location.search).get('utm_content')||''};
  window.dataLayer.push(event);
  if(id && typeof window.gtag==='function') window.gtag('event',name,{...(params||{}),page_path:event.page_path,utm_source:event.utm_source,utm_content:event.utm_content});
 };
-if(id && /^G-[A-Z0-9]+$/.test(id)){
+function enableAnalytics(){
+ window['ga-disable-'+id]=false;
+ if(window.gtag)return;
+ if(!/^G-[A-Z0-9]+$/.test(id))return;
  const s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(id);document.head.appendChild(s);
- window.gtag=function(){window.dataLayer.push(arguments)};window.gtag('js',new Date());window.gtag('config',id,{send_page_view:true});
+ window.gtag=function(){window.dataLayer.push(arguments)};window.gtag('js',new Date());window.gtag('config',id,{send_page_view:true,allow_google_signals:false,allow_ad_personalization_signals:false});
 }
+document.addEventListener('DOMContentLoaded',()=>{
+ let choice=null;
+ try{choice=localStorage.getItem('jbro_analytics_consent_v1')}catch(_){}
+ if(choice==='yes')enableAnalytics();
+ const panel=document.createElement('section');
+ panel.setAttribute('aria-label','방문 통계 설정');
+ panel.style.cssText='max-width:980px;margin:12px auto;padding:16px;border:1px solid #35546a;border-radius:10px;color:inherit;background:inherit;font-size:14px';
+ function setChoice(value){
+  try{localStorage.setItem('jbro_analytics_consent_v1',value)}catch(_){}
+  if(value==='yes'){enableAnalytics();panel.hidden=true}
+  else {window['ga-disable-'+id]=true;panel.hidden=true;if(window.gtag)location.reload()}
+ }
+ const text=document.createElement('p');text.textContent='서비스 개선을 위해 Google Analytics 방문 통계를 사용할 수 있습니다. 동의하지 않아도 무료 도구를 이용할 수 있습니다. 계산 입력값은 분석 이벤트로 보내지 않습니다.';
+ panel.appendChild(text);
+ [['동의','yes'],['거부','no']].forEach(([label,value])=>{const b=document.createElement('button');b.textContent=label;b.style.cssText='padding:8px 16px;margin-right:8px;border:1px solid #4b5d73;border-radius:6px;cursor:pointer';b.addEventListener('click',()=>setChoice(value));panel.appendChild(b)});
+ document.body.appendChild(panel);panel.hidden=choice==='yes'||choice==='no';
+ const settings=document.createElement('button');settings.textContent='방문 통계 설정';settings.style.cssText='display:block;margin:8px auto 20px;padding:6px 10px;cursor:pointer';settings.addEventListener('click',()=>{panel.hidden=!panel.hidden});document.body.appendChild(settings);
+});
 document.addEventListener('DOMContentLoaded',()=>{
  const params=new URLSearchParams(location.search);
  const campaign=params.get('utm_campaign')||'';
