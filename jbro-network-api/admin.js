@@ -4,7 +4,7 @@ let token = null, applications = [];
 const $ = id => document.getElementById(id);
 const login=$('login'), dashboard=$('dashboard'), loginMessage=$('login-message'), dashMessage=$('dashboard-message');
 const statusOptions=['pending','reviewing','approved','rejected'];
-function showLogin(message=''){ token=null;applications=[];clearClosing();clearMatching();clearSalesQueue();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
+function showLogin(message=''){ token=null;applications=[];clearClosing();clearMatching();clearSalesQueue();clearReadiness();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
 async function api(path,opts={}){
  const res=await fetch(path,{...opts,headers:{...(opts.headers||{}),'Authorization':'Bearer '+token},cache:'no-store',credentials:'omit'});
  let data={};try{data=await res.json()}catch(e){}
@@ -193,7 +193,43 @@ async function loadSalesQueue(){
  }
 }
 $('sales-queue-refresh').addEventListener('click',()=>loadSalesQueue().catch(e=>{if(token)$('sales-queue-status').textContent=e.message}));
-async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}try{await loadMatching()}catch(err){if(!token)throw err;$('matching-message').textContent='Matching unavailable: '+err.message;}try{await loadSalesQueue()}catch(err){if(!token)throw err;$('sales-queue-status').textContent='Sales queue unavailable: '+err.message;}}
+
+function clearReadiness(){
+ $('readiness-items').replaceChildren();$('readiness-status').textContent='';
+}
+async function loadReadiness(){
+ const session=token;const data=await api('/api/admin/closing-readiness');
+ if(!session||session!==token)return;
+ const root=$('readiness-items');root.replaceChildren();
+ $('readiness-status').textContent=data.as_of+' KST · '+data.items.length+' cases · '+data.items.filter(x=>x.status==='review_for_handoff').length+' ready for manual review'+(data.truncated?' · scope limited':'');
+ if(!data.items.length)root.append(make('div','empty','No active cases.'));
+ for(const x of data.items){
+   const card=make('article','application');
+   card.append(make('h3','',x.title),make('p','details',x.documented_count+'/'+x.total+' checks documented · '+x.status),make('p','summarytext','Next: '+x.next_action),make('p','meta','Fee: '+x.fee_state));
+   for(const k of x.checks){
+     const f=make('form');const title=make('label','',k.key.replaceAll('_',' '));
+     const select=make('select');select.setAttribute('aria-label',k.key+' evidence status');
+     for(const v of ['pending','documented',...(k.key==='inspection_acceptance'?['not_applicable']:[])]){
+       const opt=make('option','',v);opt.value=v;select.append(opt);
+     }select.value=k.state;
+     const ref=make('input');ref.placeholder='Evidence reference (not document contents)';ref.setAttribute('aria-label',k.key+' evidence reference');ref.maxLength=240;ref.value=k.evidence_ref||'';
+     const note=make('textarea');note.placeholder='Review note';note.setAttribute('aria-label',k.key+' review note');note.maxLength=600;note.value=k.note||'';
+     const save=make('button','quiet','Save check');save.type='submit';
+     f.append(title,select,ref,note,save);card.append(f);
+     f.addEventListener('submit',async e=>{
+       e.preventDefault();if(!token||session!==token)return;
+       if(select.value!=='pending'&&!ref.value.trim()){$('readiness-status').textContent='Evidence reference required.';return;}
+       save.disabled=true;
+       try{await api('/api/admin/closing-readiness/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deal_key:x.deal_key,check_key:k.key,state:select.value,evidence_ref:ref.value.trim(),note:note.value.trim(),revision:k.revision})});if(session===token)await loadReadiness()}
+       catch(err){if(session===token)$('readiness-status').textContent='Save failed: '+err.message}
+       finally{save.disabled=false}
+     });
+   }root.append(card);
+ }
+}
+$('readiness-refresh').addEventListener('click',()=>loadReadiness().catch(e=>{$('readiness-status').textContent=e.message}));
+
+async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}try{await loadMatching()}catch(err){if(!token)throw err;$('matching-message').textContent='Matching unavailable: '+err.message;}try{await loadSalesQueue()}catch(err){if(!token)throw err;$('sales-queue-status').textContent='Sales queue unavailable: '+err.message;}try{await loadReadiness()}catch(err){if(!token)throw err;$('readiness-status').textContent='Closing readiness unavailable: '+err.message;}}
 function renderFirst10kFunnel(data){
  const totals=$('coupon-funnel-totals');totals.replaceChildren();
  const t=data.totals||{};
