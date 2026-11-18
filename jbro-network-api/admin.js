@@ -4,7 +4,7 @@ let token = null, applications = [];
 const $ = id => document.getElementById(id);
 const login=$('login'), dashboard=$('dashboard'), loginMessage=$('login-message'), dashMessage=$('dashboard-message');
 const statusOptions=['pending','reviewing','approved','rejected'];
-function showLogin(message=''){ token=null;applications=[];clearClosing();clearMatching();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
+function showLogin(message=''){ token=null;applications=[];clearClosing();clearMatching();clearSalesQueue();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
 async function api(path,opts={}){
  const res=await fetch(path,{...opts,headers:{...(opts.headers||{}),'Authorization':'Bearer '+token},cache:'no-store',credentials:'omit'});
  let data={};try{data=await res.json()}catch(e){}
@@ -176,7 +176,24 @@ $('matching-form').addEventListener('submit',async e=>{
  finally{b.disabled=false}
 });
 
-async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}try{await loadMatching()}catch(err){if(!token)throw err;$('matching-message').textContent='Matching unavailable: '+err.message;}}
+function clearSalesQueue(){
+ $('sales-queue-cards').replaceChildren();$('sales-queue-status').textContent='';
+}
+async function loadSalesQueue(){
+ const session=token, data=await api('/api/admin/sales-queue');
+ if(!session||session!==token)return;
+ const root=$('sales-queue-cards');root.replaceChildren();
+ const t=data.summary||{};
+ $('sales-queue-status').textContent='As of '+data.as_of+' (KST) · '+t.in_scope+' open cases · '+t.urgent+' urgent · '+t.high+' high'+(data.case_scope_truncated||data.line_scope_truncated?' · Limited scope; additional records exist.':'');
+ if(!data.items.length)root.append(make('div','empty','No active cases.'));
+ for(const item of data.items){
+  const c=make('article','application');
+  c.append(make('h3','',item.title),make('p','details',item.priority.toUpperCase()+' · priority score '+item.score+' · due '+(item.due_date||'not set')),make('p','meta',item.deal_key+' · '+item.stage+' · fee '+item.fee_state),make('p','summarytext','Blocker: '+item.blocker),make('p','summarytext','Next action: '+item.next_action),make('p','meta','Exact pairs: '+item.matching.exact_pairs+' · review required: '+item.matching.review_required),make('p','meta','Evidence: '+item.source_ref),make('p','meta','Check latest Gmail thread and drafts before outreach. No dispatch authorized.'));
+  root.append(c);
+ }
+}
+$('sales-queue-refresh').addEventListener('click',()=>loadSalesQueue().catch(e=>{if(token)$('sales-queue-status').textContent=e.message}));
+async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}try{await loadMatching()}catch(err){if(!token)throw err;$('matching-message').textContent='Matching unavailable: '+err.message;}try{await loadSalesQueue()}catch(err){if(!token)throw err;$('sales-queue-status').textContent='Sales queue unavailable: '+err.message;}}
 function renderFirst10kFunnel(data){
  const totals=$('coupon-funnel-totals');totals.replaceChildren();
  const t=data.totals||{};
