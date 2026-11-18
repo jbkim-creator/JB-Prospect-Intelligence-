@@ -65,7 +65,8 @@ document.addEventListener('click',function(e){
  const a=e.target.closest('a');if(!a)return;
  if(a.href.includes('JBRO_Free_Quote_Sample.csv'))window.jbroTrack('sample_download',{file_name:'JBRO_Free_Quote_Sample.csv'});
  else if(a.href.startsWith('mailto:'))window.jbroTrack('purchase_interest_email_click',{link_text:(a.textContent||'').trim()});
- else if(a.href.includes('free-quote-calculator.html'))window.jbroTrack('calculator_link_click',{link_text:(a.textContent||'').trim()});
+ else if(/(?:free-quote|target-price|fx-breakeven|import-landed-cost|sales-commission|order-breakeven)-calculator\.html/.test(a.href))window.jbroTrack('calculator_link_click',{link_text:(a.textContent||'').trim()});
+ else if(a.href.includes('free-trade-tools.html'))window.jbroTrack('tools_directory_click');
  else if(a.href.includes('index.html'))window.jbroTrack('product_details_click',{link_text:(a.textContent||'').trim()});
 });
 document.addEventListener('DOMContentLoaded',()=>{
