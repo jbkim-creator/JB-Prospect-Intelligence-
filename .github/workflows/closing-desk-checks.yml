@@ -1,0 +1,22 @@
+name: Closing Desk checks
+on:
+  pull_request:
+    branches: [feature/jbro-global-network-portal]
+    paths:
+      - 'jbro-network-api/**'
+      - '.github/workflows/closing-desk-checks.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r jbro-network-api/requirements.txt
+      - run: python -m unittest discover -s jbro-network-api -p test_closing_desk.py -v
+      - run: python -m py_compile jbro-network-api/server.py jbro-network-api/closing_desk.py
+      - run: node --check jbro-network-api/admin.js

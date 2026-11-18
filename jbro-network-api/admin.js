@@ -4,7 +4,7 @@ let token = null, applications = [];
 const $ = id => document.getElementById(id);
 const login=$('login'), dashboard=$('dashboard'), loginMessage=$('login-message'), dashMessage=$('dashboard-message');
 const statusOptions=['pending','reviewing','approved','rejected'];
-function showLogin(message=''){ token=null;applications=[];$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
+function showLogin(message=''){ token=null;applications=[];clearClosing();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
 async function api(path,opts={}){
  const res=await fetch(path,{...opts,headers:{...(opts.headers||{}),'Authorization':'Bearer '+token},cache:'no-store',credentials:'omit'});
  let data={};try{data=await res.json()}catch(e){}
@@ -68,7 +68,76 @@ function render(){
    card.append(ops);cards.append(card);
  }
 }
-async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);}
+
+let closingCases=[], closingEdit=null;
+const closingFields=['deal_key','title','sector','stage','source_ref','blocker','next_action','due_date','fee_state','fee_evidence','handoff_ref','currency','indicative_value'];
+function resetClosing(){
+ closingEdit=null;
+ $('closing-form').reset();
+ $('closing-form').elements.namedItem('deal_key').readOnly=false;
+ $('closing-save').textContent='Create private case';
+}
+function clearClosing(){
+ closingCases=[];resetClosing();$('closing-counts').textContent='';$('closing-message').textContent='';
+ $('closing-cards').replaceChildren();$('closing-filter').value='';
+}
+function editClosing(item){
+ closingEdit={id:item.id,revision:item.revision};
+ const form=$('closing-form');
+ for(const k of closingFields)form.elements.namedItem(k).value=item[k]??'';
+ form.elements.namedItem('deal_key').readOnly=true;
+ $('closing-save').textContent='Save case revision '+item.revision;
+ $('closing-message').textContent='Editing '+item.deal_key+'. No messages or contract actions will be triggered.';
+ form.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderClosing(){
+ const root=$('closing-cards');root.replaceChildren();
+ const filter=$('closing-filter').value;
+ const items=closingCases.filter(c=>!filter||c.stage===filter);
+ if(!items.length){root.append(make('div','empty','No cases in this view.'));return;}
+ for(const c of items){
+   const card=make('article','application');
+   card.append(make('div','id',c.deal_key+' · '+c.sector+' · revision '+c.revision),make('h2','',c.title));
+   card.append(make('p','details','Stage: '+c.stage+' · fee: '+c.fee_state+' · action due: '+(c.due_date||'not set')));
+   card.append(make('p','summarytext','Blocker: '+c.blocker),make('p','summarytext','Next: '+c.next_action));
+   card.append(make('p','meta','Evidence reference: '+c.source_ref));
+   if(c.fee_evidence)card.append(make('p','meta','Fee evidence: '+c.fee_evidence));
+   if(c.handoff_ref)card.append(make('p','meta','Handoff: '+c.handoff_ref));
+   if(c.currency&&c.indicative_value)card.append(make('p','meta','Indicative only: '+c.currency+' '+c.indicative_value+' (not GMV)'));
+   const button=make('button','quiet','Edit next action');button.type='button';
+   button.addEventListener('click',()=>editClosing(c));card.append(button);root.append(card);
+ }
+}
+async function loadClosing(){
+ const session=token;
+ const data=await api('/api/admin/closing-desk');
+ if(!session||session!==token)return;
+ closingCases=data.cases||[];
+ const counts=data.counts||{};
+ const total=Object.values(counts).reduce((a,b)=>a+Number(b),0);
+ const active=total-Number(counts.on_hold||0)-Number(counts.lost||0)-Number(counts.handoff||0);
+ $('closing-counts').textContent='Active cases: '+active+' · total: '+total+' · showing up to '+(data.limit||200)+' · ordered by action due date.';
+ renderClosing();
+}
+$('closing-filter').addEventListener('change',renderClosing);
+$('closing-reset').addEventListener('click',()=>{resetClosing();$('closing-message').textContent='Ready for a new case.'});
+$('closing-form').addEventListener('submit',async e=>{
+ e.preventDefault();const form=$('closing-form');if(!token||!form.reportValidity())return;
+ const b=$('closing-save');b.disabled=true;
+ const payload=Object.fromEntries(new FormData(form));const current=closingEdit;
+ if(current)payload.revision=current.revision;
+ const session=token;
+ try {
+   await api('/api/admin/closing-desk'+(current?'/'+current.id:''),{method:current?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+   if(session!==token)return;
+   resetClosing();$('closing-message').textContent='Private case saved. No contract, GMV or receipt was created.';
+   await loadClosing();
+ } catch(err) {
+   if(session===token)$('closing-message').textContent='Save failed: '+err.message+'. Refresh and re-open the record if its revision changed.';
+ } finally {b.disabled=false;}
+});
+
+async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}}
 function renderFirst10kFunnel(data){
  const totals=$('coupon-funnel-totals');totals.replaceChildren();
  const t=data.totals||{};
