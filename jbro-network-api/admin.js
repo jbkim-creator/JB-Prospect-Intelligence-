@@ -4,7 +4,7 @@ let token = null, applications = [];
 const $ = id => document.getElementById(id);
 const login=$('login'), dashboard=$('dashboard'), loginMessage=$('login-message'), dashMessage=$('dashboard-message');
 const statusOptions=['pending','reviewing','approved','rejected'];
-function showLogin(message=''){ token=null;applications=[];clearClosing();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
+function showLogin(message=''){ token=null;applications=[];clearClosing();clearMatching();$('token').value='';$('issued-key').value='';$('issued-key-panel').hidden=true;dashboard.hidden=true;login.hidden=false;loginMessage.textContent=message; }
 async function api(path,opts={}){
  const res=await fetch(path,{...opts,headers:{...(opts.headers||{}),'Authorization':'Bearer '+token},cache:'no-store',credentials:'omit'});
  let data={};try{data=await res.json()}catch(e){}
@@ -137,7 +137,46 @@ $('closing-form').addEventListener('submit',async e=>{
  } finally {b.disabled=false;}
 });
 
-async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}}
+
+function clearMatching(){
+ $('matching-form').reset();$('matching-message').textContent='';
+ $('matching-candidates').replaceChildren();$('matching-lines').replaceChildren();
+}
+async function loadMatching(){
+ const session=token;
+ const [lines,matches]=await Promise.all([api('/api/admin/matching/lines'),api('/api/admin/matching/candidates')]);
+ if(!session||session!==token)return;
+ const root=$('matching-candidates'),lr=$('matching-lines');root.replaceChildren();lr.replaceChildren();
+ $('matching-message').textContent='Candidate pairs: '+matches.total_in_scope+' · active lines screened: '+matches.lines_in_scope+' (maximum 500 lines; shows up to 200 pairs).';
+ if(!matches.candidates.length)root.append(make('div','empty','No exact-MPN candidates in scope.'));
+ for(const m of matches.candidates){
+   const c=make('article','application');
+   c.append(make('h3','',m.mpn),make('p','details',m.status+' · overlapping quantity: '+(m.overlap_quantity??'unknown')),
+    make('p','meta',m.buy_key+' → '+m.sell_key),make('p','summarytext',m.flags.length?m.flags.join(' · '):'Commercial candidate only; fees, logistics and compliance still require review.'));
+   root.append(c);
+ }
+ if(!lines.lines.length)lr.append(make('div','empty','No registered lines.'));
+ for(const l of lines.lines){
+   const c=make('article','application');
+   c.append(make('h3','',l.side.toUpperCase()+' · '+l.mpn),make('p','details',l.line_key+' · '+l.case_key+' · '+(l.active?'active':'archived')),
+    make('p','summarytext','Quantity: '+(l.quantity??'unknown')+' · Unit price: '+(l.currency??'')+' '+(l.unit_price??'unknown')+' · '+l.verification),
+    make('p','meta','Evidence: '+l.source_ref+' · validity: '+(l.valid_until??'unknown')));
+   if(l.active){const b=make('button','quiet','Archive line');b.type='button';b.addEventListener('click',async()=>{
+     if(!token||!confirm('Archive this line? It will no longer be matched.'))return;
+     b.disabled=true;try{await api('/api/admin/matching/lines/'+l.id+'/archive',{method:'POST'});await loadMatching()}catch(e){$('matching-message').textContent=e.message}finally{b.disabled=false}
+   });c.append(b)}lr.append(c);
+ }
+}
+$('matching-refresh').addEventListener('click',()=>loadMatching().catch(e=>{$('matching-message').textContent=e.message}));
+$('matching-form').addEventListener('submit',async e=>{
+ e.preventDefault();const form=$('matching-form');if(!token||!form.reportValidity())return;
+ const b=$('matching-save');b.disabled=true;const session=token;
+ try{await api('/api/admin/matching/lines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(form)))});if(session===token){form.reset();await loadMatching()}}
+ catch(err){if(session===token)$('matching-message').textContent='Registration failed: '+err.message}
+ finally{b.disabled=false}
+});
+
+async function refresh(){const [data,opps,missions,claims,rewards,sales,kpis,campaign]=await Promise.all([api('/api/admin/applications'),api('/api/admin/opportunities'),api('/api/admin/tradequest/missions'),api('/api/admin/tradequest/claims'),api('/api/admin/rewards'),api('/api/admin/deal-rooms'),api('/api/admin/gmv-kpis'),api('/api/admin/first10k-funnel')]);applications=data.applications||[];render();renderOpportunities(opps.opportunities||[]);renderQuestAdmin(missions.missions||[],claims.claims||[]);renderRewards(rewards.deals||[]);renderSales(sales.rooms||[]);renderGMVKpis(kpis);renderFirst10kFunnel(campaign);try{await loadClosing()}catch(err){if(!token)throw err;$('closing-message').textContent='Closing desk unavailable: '+err.message;}try{await loadMatching()}catch(err){if(!token)throw err;$('matching-message').textContent='Matching unavailable: '+err.message;}}
 function renderFirst10kFunnel(data){
  const totals=$('coupon-funnel-totals');totals.replaceChildren();
  const t=data.totals||{};
