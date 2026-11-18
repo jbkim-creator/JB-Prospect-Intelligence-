@@ -656,6 +656,8 @@ import matching
 matching.init(app, connection, authorized_admin)
 import sales_queue
 sales_queue.init(app, connection, authorized_admin)
+import closing_readiness
+closing_readiness.init(app, connection, authorized_admin)
 
 # Check real database connectivity once per worker startup. No secrets or records in logs.
 try:
