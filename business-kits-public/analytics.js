@@ -52,14 +52,10 @@ document.addEventListener('DOMContentLoaded',()=>{
    }catch(_){}
   });
  }
- if(source || content || campaign){
-  document.querySelectorAll('a[href^="mailto:"]').forEach(a=>{
-   const u=new URL(a.href);const q=new URLSearchParams(u.search);
-   const prior=q.get('body')||'안녕하세요. JBRO Business Kit 구매 안내를 받고 싶습니다.';
-   q.set('body',prior+'\n\n방문 경로: '+[source,campaign,content].filter(Boolean).join(' / ')+'\n(원하지 않으면 이 줄을 삭제해 주세요.)');
-   u.search=q.toString(); a.href=u.toString();
-  });
- }
+ // Leave mailto links untouched: URLSearchParams serializes spaces as '+',
+ // which Gmail's mailto handler may display literally. Attribution remains
+ // available through the consented purchase_interest_email_click event.
+
 });
 document.addEventListener('click',function(e){
  const a=e.target.closest('a');if(!a)return;
