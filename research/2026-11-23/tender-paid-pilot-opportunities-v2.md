@@ -41,3 +41,13 @@
 - Tender 관련 기존 SENT: 수성·태조·삼보·평화·벽산·건화·도화.
 - 해당 주요 주소 INBOX 직접 회신 검색 0건, 별칭 회신 여부 미확인.
 - 이번 작업 외부 발송 0건, 신규 유료계약·입금 확인 0건. 신규 운영 배포 0건.
+
+
+## 2026-11-23 follow-up — PQ proof refinements
+- KEIT CM: original full notice text mirrored by BidPro specifically requires online PQ score-sheet submission **by 2026-11-26 18:00**, in addition to consortium agreement that day. Business-info registration requests had a **2026-11-18 18:00 processing caution**; after that date approval by PQ deadline is not assured. DO NOT tell a new entrant that 11/26 is enough. Mirror: https://www.bidpro.co.kr/n0_ipchal/konggo/svc/konggo_view.asp?num=3202329
+- KEIT CM: recent 3-year similar construction CM experience, personnel track record and overlapping allocations and minimum 10% consortium shares are specified in the reproduced notice. Actual company eligibility is unknown. The mirrored bidding period appears to contain a **2025/2026 year typo**, so latest G2B official record takes precedence.
+- Ulsan welfare CM: PQ **physical submission at Ulsan Dong-gu Construction Division on 2026-11-30 10:00–17:00, excluding 12:00–13:00 lunch**, not e-submission/post/fax; official application attachments plus separately emailed scanned materials are listed; original evaluation participants can omit refiling only if no changes. Mirror: https://www.bidpro.co.kr/n0_ipchal/konggo/svc/konggo_view.asp?num=3209781
+- Gmail buyer-side check for known Tender outbound to Kunhwa/Dohwa/Soosung/Taejo and Industrial followup domains found **no direct responses in scoped searches**. No blanket statement about inbox-wide replies.
+- Existing Kunhwa follow-up DRAFT retained: r1817638559821775515 (not sent).
+- NEW Dohwa in-thread DRAFT: r1700441231848351051, existing SENT parent 1a1ba6d52475a889, message 1a2041c42db3afc9 (not sent).
+- Under current '진행' instruction, NO emails were sent; owner explicit send authorization remains necessary. No paid agreement or payment confirmed.
