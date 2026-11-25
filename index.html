@@ -22,7 +22,7 @@
 <section id="how"><h2>From opportunity to execution</h2><div class="grid"><div class="panel"><div class="step">01 / INTRODUCE</div><h3>Share a real opportunity</h3><p>Submit a non-confidential requirement, stock offer or execution capability.</p></div><div class="panel"><div class="step">02 / VERIFY</div><h3>Qualify the scope</h3><p>We review specifications, authorization, commercial feasibility and confidentiality.</p></div><div class="panel"><div class="step">03 / EXECUTE</div><h3>Build a transaction team</h3><p>Agree roles and fees in writing before sensitive introductions or execution.</p></div></div></section>
 <section id="roles"><h2>How you can participate</h2><div class="grid"><div class="panel"><h3>Buyer</h3><p>Provide a qualified purchase requirement.</p></div><div class="panel"><h3>Supplier</h3><p>Provide verifiable inventory or assets.</p></div><div class="panel"><h3>Opportunity contributor</h3><p>Introduce an authorized business opportunity.</p></div><div class="panel"><h3>Execution partner</h3><p>Support technical, inspection or logistical delivery.</p></div><div class="panel"><h3>Regional partner</h3><p>Coordinate qualified parties in your geography.</p></div><div class="panel"><h3>Service partner</h3><p>Deliver specialist AI, data or business services.</p></div></div></section>
 <section id="join" class="panel" style="margin-top:48px"><div class="kicker">Spot Deal inquiries</div><h2 style="margin:8px 0">Tell us about a real deal</h2><p>Use the form to prepare a business inquiry email to JBRO. You must send it from your own email app; no information is saved or sent automatically. Do not include confidential buyer identities, private prices or documents at this stage.</p>
-<form id="f" class="formgrid"><div><label for="org">Organization *</label><input required id="org" maxlength="120"></div><div><label for="email">Business email *</label><input required id="email" type="email" maxlength="160"></div><div><label for="country">Country / region</label><input id="country" maxlength="80"></div><div><label for="role">Partner role *</label><select required id="role"><option value="">Choose one</option><option>Buyer</option><option>Supplier</option><option>Opportunity contributor</option><option>Execution partner</option><option>Regional partner</option><option>Service partner</option></select></div><div class="full"><label for="referral">Referral or campaign code (optional)</label><input id="referral" maxlength="40" placeholder="Optional referral code" aria-describedby="referral-note"><p id="referral-note" class="small">If supplied, this code is included with your inquiry for referral reporting. Do not enter confidential information.</p></div><div class="full"><label for="summary">Non-confidential summary *</label><textarea required id="summary" maxlength="650"></textarea></div><div class="full consent"><input required type="checkbox" id="ok"><label for="ok">I agree to prepare an inquiry email and send it to JBRO myself. Nothing is submitted automatically or stored by this website.</label></div><div class="full"><button type="submit" class="btn">Prepare Inquiry Email</button><p class="small" role="status" id="status"></p></div></form></section>
+<form id="f" class="formgrid"><div><label for="org">Organization *</label><input required id="org" maxlength="120"></div><div><label for="email">Business email *</label><input required id="email" type="email" maxlength="160"></div><div><label for="country">Country / region</label><input id="country" maxlength="80"></div><div><label for="role">Partner role *</label><select required id="role"><option value="">Choose one</option><option>Buyer</option><option>Supplier</option><option>Opportunity contributor</option><option>Execution partner</option><option>Regional partner</option><option>Service partner</option></select></div><div class="full"><label for="summary">Non-confidential summary *</label><textarea required id="summary" maxlength="650"></textarea></div><div class="full consent"><input required type="checkbox" id="ok"><label for="ok">I agree to prepare an inquiry email and send it to JBRO myself. Nothing is submitted automatically or stored by this website.</label></div><div class="full"><button type="submit" class="btn">Prepare Inquiry Email</button><p class="small" role="status" id="status"></p></div></form></section>
 <section class="panel"><h3>Participation principles</h3><p>We review each inquiry. Submitting an inquiry does not guarantee a partnership, transaction or payment. Confidential information sharing, deal access and success fees require separate express authorization and written agreements. This static page does not store or submit inquiries. Sending the prepared email is your responsibility.</p></section></main>
 <footer>JBRO Spot Deal Network · <a href="mailto:jbkim@jbrocap.com">jbkim@jbrocap.com</a><p style="color:#c8dfd5">© 2026 JBRO</p></footer>
 <script>
@@ -104,9 +104,7 @@ const form=document.getElementById('f'), status=document.getElementById('status'
 form.addEventListener('submit',function(e){
  e.preventDefault(); if(!form.reportValidity())return;
  const v=id=>document.getElementById(id).value.trim();
- const code=(v('referral')||new URLSearchParams(location.search).get('ref')||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40);
- const prefix=(code?'[Referral: '+code+'] ':'');
- const data={organization:v('org'),email:v('email'),country:v('country'),role:v('role'),summary:prefix+v('summary').slice(0,650-prefix.length)};
+ const data={organization:v('org'),email:v('email'),country:v('country'),role:v('role'),summary:v('summary').slice(0,650)};
  const subject='JBRO Spot Deal Network | Deal inquiry | '+data.organization;
  const body=['Organization: '+data.organization,'Business email: '+data.email,'Country: '+data.country,'Role: '+data.role,'Summary: '+data.summary].join('\n');
  const mailto='mailto:jbkim@jbrocap.com?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
@@ -119,11 +117,5 @@ form.addEventListener('submit',function(e){
  window.location.href=mailto;
 });
 </script>
-<script>
-(function(){
-'use strict';
-const preset=(new URLSearchParams(location.search).get('ref')||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40);
-if(preset)document.getElementById('referral').value=preset;
-})();
-</script>
+
 </body></html>
