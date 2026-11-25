@@ -2,11 +2,11 @@
 const $=id=>document.getElementById(id);
 const kinds={
  buyer:{name:'바이어',help:'제품과 진출하려는 국가를 알려주세요.',country:'대상 국가 *',qty:'판매 가능 수량 (선택)',time:'희망 조사 일정 (선택)',required:['product','country']},
- stock:{name:'재고',help:'판매 권한이 있는 품목의 가용 수량과 출고 가능일을 알려주세요.',country:'보관 국가·지역 (선택)',qty:'가용 수량 *',time:'출고 가능일 *',required:['product','quantity','timing']},
- sourcing:{name:'소싱',help:'품번·수량·희망 납기·납품 국가를 알려주세요.',country:'납품 국가 *',qty:'요청 수량 *',time:'희망 납기 *',required:['product','country','quantity','timing']}
+ stock:{name:'산업설비·재고 매각',help:'판매 권한이 있는 자산의 모델·수량·출고 가능일을 적고, 추가 조건에 상태·보관 위치·희망가격을 알려주세요.',country:'보관 국가·지역 (선택)',qty:'가용 수량 *',time:'출고 가능일 *',required:['product','quantity','timing']},
+ sourcing:{name:'설비·부품 구매',help:'모델 또는 필수 사양·수량·도입 일정·납품 국가를 알려주세요.',country:'납품 국가 *',qty:'요청 수량 *',time:'희망 납기 *',required:['product','country','quantity','timing']}
 };
 const params=new URLSearchParams(location.search);
-const kind=$('kind');kind.value=kinds[params.get('type')]?params.get('type'):'buyer';
+const kind=$('kind');kind.value=kinds[params.get('type')]?params.get('type'):'stock';
 function track(name){if(typeof window.jbroTrack==='function')window.jbroTrack(name,{inquiry_type:kind.value});}
 function configure(){const k=kinds[kind.value];$('help').textContent=k.help;$('country-label').textContent=k.country;$('quantity-label').textContent=k.qty;$('timing-label').textContent=k.time;for(const id of ['product','country','quantity','timing'])$(id).required=k.required.includes(id);$('send').hidden=true;const u=new URL(location.href);u.searchParams.set('type',kind.value);history.replaceState(null,'',u);track('inquiry_type_selected');}
 kind.addEventListener('change',configure);configure();
