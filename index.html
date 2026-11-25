@@ -108,13 +108,13 @@ form.addEventListener('submit',function(e){
  const prefix=(code?'[Referral: '+code+'] ':'');
  const data={organization:v('org'),email:v('email'),country:v('country'),role:v('role'),summary:prefix+v('summary').slice(0,650-prefix.length)};
  const subject='JBRO Spot Deal Network | Deal inquiry | '+data.organization;
- const body=['Organization: '+data.organization,'Business email: '+data.email,'Country: '+data.country,'Role: '+data.role,'Summary: '+data.summary].join('\\n');
+ const body=['Organization: '+data.organization,'Business email: '+data.email,'Country: '+data.country,'Role: '+data.role,'Summary: '+data.summary].join('\n');
  const mailto='mailto:jbkim@jbrocap.com?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
  const ko=JBRO_LANG.get()==='ko';
  status.textContent=ko?'이 사이트는 이메일 접수 방식입니다. 이메일 앱을 열어 전송해야만 문의가 접수됩니다. 자동 제출되거나 서버에 저장되지 않습니다. ':'This site uses email-based inquiries. You must send the composed email from your email app; nothing is automatically submitted or stored. ';
  const send=document.createElement('a');send.href=mailto;send.textContent=ko?'이메일 앱에서 문의 보내기':'Open email app to send inquiry';send.style.fontWeight='700';send.style.marginRight='12px';status.append(send);
  const copy=document.createElement('button');copy.type='button';copy.textContent=ko?'문의 내용 복사':'Copy inquiry';copy.style.marginTop='8px';copy.style.padding='6px';
- copy.addEventListener('click',function(){const dataStr='To: jbkim@jbrocap.com\\nSubject: '+subject+'\\n\\n'+body;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(dataStr).then(()=>{copy.textContent=ko?'복사됨':'Copied'}).catch(()=>{copy.textContent=ko?'복사 실패—이메일 앱 사용':'Copy failed—use email app'})}else{copy.textContent=ko?'브라우저에서 복사 불가—이메일 앱 사용':'Copy unavailable—use email app'}});
+ copy.addEventListener('click',function(){const dataStr='To: jbkim@jbrocap.com\nSubject: '+subject+'\n\n'+body;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(dataStr).then(()=>{copy.textContent=ko?'복사됨':'Copied'}).catch(()=>{copy.textContent=ko?'복사 실패—이메일 앱 사용':'Copy failed—use email app'})}else{copy.textContent=ko?'브라우저에서 복사 불가—이메일 앱 사용':'Copy unavailable—use email app'}});
  status.append(copy);
  window.location.href=mailto;
 });
