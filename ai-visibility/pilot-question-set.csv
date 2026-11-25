@@ -1,0 +1,6 @@
+company,website,contact,sector,query_ko,query_en,status
+HY Corporation,https://www.hycorpo.com,sales@hycorpo.com,industrial marine parts,한국에서 선박용 단종 부품을 조달할 수 있는 회사 추천,Recommend Korean suppliers for obsolete marine automation components,not_measured
+Hypertech,https://hypertech-parts.co.kr,admin01@hypertech-parts.co.kr,MLCC distributor,한국 Murata MLCC 공급업체 추천,Recommend suppliers in Korea for Murata MLCC urgent sourcing,not_measured
+AHOP TECH,https://www.ahoptech.com,ahop@ahoptech.com,IC sourcing,한국에서 검증된 반도체 IC 긴급 공급업체 추천,Recommend Korea-based verified IC sourcing distributors,not_measured
+ADMTEC,https://www.admtec.co.kr,sales@admtec.co.kr,aerospace connectors,한국 항공 방산용 커넥터 공급업체 추천,Find Korean aerospace and defense connector distributors,not_measured
+ANTTEC,https://www.anttec.co.kr,sales@anttec.co.kr,automotive electronics,한국 자동차 전력 반도체 부품 공급업체 추천,Korea automotive power IC and MOSFET distributors,not_measured
