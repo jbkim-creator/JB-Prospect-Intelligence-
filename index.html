@@ -145,6 +145,11 @@ document.querySelectorAll('[data-chip-inquiry]').forEach(link=>link.addEventList
  updateChipInquiry();
 }));
 document.querySelectorAll('.lang-button').forEach(button=>button.addEventListener('click',updateChipInquiry));
+const requestedInquiry=new URLSearchParams(location.search).get('inquiry');
+if(requestedInquiry==='cash-out'||requestedInquiry==='urgent-rfq'){
+ inquiryType.value=requestedInquiry==='cash-out'?'cash':'sos';
+ document.getElementById('role').value=chipInquiries[inquiryType.value].role;
+}
 updateChipInquiry();
 form.addEventListener('submit',function(e){
  e.preventDefault(); if(!form.reportValidity())return;
