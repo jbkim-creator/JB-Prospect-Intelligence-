@@ -35,7 +35,10 @@ Deno.serve(async req=>{
     if(!input.complete||rows.length===0||rows.length>5000)return json({error:"Upload 1-5000 records and confirm the list is complete."},400);
     const types=new Set(["customer","dnc","existing_contact","active_deal"]),unique=new Map<string,any>();
     for(const row of rows){const name=String(row.entity_name||row.company||"").trim(),type=String(row.protection_type||row.type||"").trim(),domain=domainOf(String(row.domain||row.website||"")),email=norm(String(row.email||""));if(!name||!types.has(type))return json({error:"Each record needs an entity_name and a valid type: customer, dnc, existing_contact, or active_deal."},400);const key=[type,domain,email,name.toLowerCase()].join("|");unique.set(key,{entity_name:name,normalized_domain:domain||null,normalized_email:email||null,protection_type:type,source_ref:"operator_import"})}
-    const items=[...unique.values()];const ins=await supabase.from("mf_protected_entities").insert(items);if(ins.error)throw ins.error;
+    const incoming=[...unique.values()],existing=await supabase.from("mf_protected_entities").select("entity_name,normalized_domain,normalized_email,protection_type");if(existing.error)throw existing.error;
+    const known=new Set((existing.data||[]).map((x:any)=>[x.protection_type,x.normalized_domain||"",x.normalized_email||"",x.entity_name.toLowerCase()].join("|")));
+    const items=incoming.filter(x=>!known.has([x.protection_type,x.normalized_domain||"",x.normalized_email||"",x.entity_name.toLowerCase()].join("|")));
+    if(items.length){const ins=await supabase.from("mf_protected_entities").insert(items);if(ins.error)throw ins.error;}
     const state=await supabase.from("mf_system_state").update({protection_seeded:true,updated_at:new Date().toISOString()}).eq("id",true);if(state.error)throw state.error;
     return json({imported:items.length,protection_seeded:true,message:"Protection list loaded. Review blocked leads before changing their status."},201)
    }
