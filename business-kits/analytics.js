@@ -64,7 +64,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 document.addEventListener('click',function(e){
  const a=e.target.closest('a');if(!a)return;
- if(a.href.includes('JBRO_Free_Quote_Sample.csv'))window.jbroTrack('sample_download',{file_name:'JBRO_Free_Quote_Sample.csv'});
+ if(a.dataset.trackEvent==='dp001_sample_download')window.jbroTrack('dp001_sample_download',{item_id:'DP-001'});
+ else if(a.href.includes('JBRO_Free_Quote_Sample.csv'))window.jbroTrack('sample_download',{file_name:'JBRO_Free_Quote_Sample.csv'});
  else if(a.hostname==='open.kakao.com')window.jbroTrack('kakao_contact_click');
  else if(a.hostname==='www.instagram.com'||a.hostname==='instagram.com')window.jbroTrack('instagram_profile_click');
  else if(a.href.startsWith('mailto:'))window.jbroTrack('purchase_interest_email_click',{link_text:(a.textContent||'').trim()});
