@@ -19,4 +19,3 @@ Official program pages are linked for Visual Factories, Indeavor, and Dev Partne
 
 ## Local check
 Open `index.html` directly to inspect the UI. API operations require the Supabase function and an authorized session. External actions are absent from the API.
-
