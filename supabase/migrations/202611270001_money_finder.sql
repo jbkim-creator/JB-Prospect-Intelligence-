@@ -74,4 +74,3 @@ alter table public.mf_research_tasks enable row level security;
 alter table public.mf_engine_outbox enable row level security;
 revoke all on public.mf_system_state, public.mf_protected_entities, public.mf_leads, public.mf_rewards, public.mf_research_tasks, public.mf_engine_outbox from anon, authenticated;
 grant all on public.mf_system_state, public.mf_protected_entities, public.mf_leads, public.mf_rewards, public.mf_research_tasks, public.mf_engine_outbox to service_role;
-
