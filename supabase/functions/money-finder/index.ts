@@ -31,7 +31,7 @@ Deno.serve(async req=>{
   const input=await req.json();
   if(path.endsWith("/leads")){
    const company=String(input.company||"").trim(), program=String(input.program||""), fitReason=String(input.fitReason||"").trim();
-   if(!company||!fitReason||!(["Visual Factories","Indeavor","Dev Partners"].includes(program)))return json({error:"ȸ��, ���α׷�, ���� �ٰŸ� Ȯ���ϼ���."},400);
+   if(!company||!fitReason||!(["Visual Factories","Indeavor","Dev Partners"].includes(program)))return json({error:"\\uD68C\\uC0AC, \\uD504\\uB85C\\uADF8\\uB7A8, \\uC801\\uD569 \\uADFC\\uAC70\\uB97C \\uD655\\uC778\\uD558\\uC138\\uC694."},400);
    const email=norm(String(input.email||"")), domain=domainOf(String(input.website||"")), companyKey=company.toLowerCase().replace(/[%,()]/g,"");
    const state=await supabase.from("mf_system_state").select("protection_seeded").eq("id",true).single();if(state.error)throw state.error;
    const [sameR,protectedR]=await Promise.all([
@@ -63,6 +63,5 @@ Deno.serve(async req=>{
    const r=await supabase.from("mf_rewards").insert({lead_id:leadId,status:input.status,amount:input.amount===""||input.amount==null?null:Number(input.amount),currency:String(input.currency||"USD").toUpperCase(),evidence:String(input.evidence||""),approval_required:true}).select("id,status,lead_id").single();if(r.error)throw r.error;return json({reward:r.data},201)
   }
   return json({error:"Not found"},404)
- }catch(e){console.error(e);return json({error:e.message||"��û ó�� ����"},500)}
+ }catch(e){console.error(e);return json({error:e.message||"\\uC694\\uCCAD \\uCC98\\uB9AC \\uC2E4\\uD328"},500)}
 });
-
