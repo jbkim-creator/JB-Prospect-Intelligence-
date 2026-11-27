@@ -3,9 +3,14 @@
 const id='G-F0EZXJ8M8M';
 window.dataLayer=window.dataLayer||[];
 window.jbroTrack=function(name,params){
- const event={event:name,...(params||{}),page_path:location.pathname,utm_source:new URLSearchParams(location.search).get('utm_source')||'',utm_content:new URLSearchParams(location.search).get('utm_content')||''};
- window.dataLayer.push(event);
- if(id && typeof window.gtag==='function') window.gtag('event',name,{...(params||{}),page_path:event.page_path,utm_source:event.utm_source,utm_content:event.utm_content});
+ const query=new URLSearchParams(location.search);
+ const details={...(params||{}),page_path:location.pathname};
+ for(const key of ['utm_source','utm_medium','utm_campaign','utm_content']){
+  const value=query.get(key);
+  if(value)details[key]=value;
+ }
+ window.dataLayer.push({event:name,...details});
+ if(typeof window.gtag==='function')window.gtag('event',name,details);
 };
 function enableAnalytics(){
  window['ga-disable-'+id]=false;
@@ -60,6 +65,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 document.addEventListener('click',function(e){
  const a=e.target.closest('a');if(!a)return;
  if(a.href.includes('JBRO_Free_Quote_Sample.csv'))window.jbroTrack('sample_download',{file_name:'JBRO_Free_Quote_Sample.csv'});
+ else if(a.hostname==='open.kakao.com')window.jbroTrack('kakao_contact_click');
+ else if(a.hostname==='www.instagram.com'||a.hostname==='instagram.com')window.jbroTrack('instagram_profile_click');
  else if(a.href.startsWith('mailto:'))window.jbroTrack('purchase_interest_email_click',{link_text:(a.textContent||'').trim()});
  else if(/(?:free-quote|target-price|fx-breakeven|import-landed-cost|sales-commission|order-breakeven)-calculator\.html/.test(a.href))window.jbroTrack('calculator_link_click',{link_text:(a.textContent||'').trim()});
  else if(a.href.includes('free-trade-tools.html'))window.jbroTrack('tools_directory_click');
