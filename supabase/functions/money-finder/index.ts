@@ -17,18 +17,33 @@ Deno.serve(async req=>{
  try {
   const path=new URL(req.url).pathname.replace(/\/$/,"");
   if(req.method==="GET"&&(path===""||path.endsWith("/money-finder"))){
-   const [leadsR,rewardsR,tasksR,outboxR]=await Promise.all([
+    const [leadsR,rewardsR,tasksR,outboxR,programsR]=await Promise.all([
     supabase.from("mf_leads").select("*").order("created_at",{ascending:false}).limit(250),
     supabase.from("mf_rewards").select("*").order("created_at",{ascending:false}).limit(500),
     supabase.from("mf_research_tasks").select("*").order("created_at",{ascending:false}).limit(100),
-    supabase.from("mf_engine_outbox").select("*").order("created_at",{ascending:false}).limit(100)
+     supabase.from("mf_engine_outbox").select("*").order("created_at",{ascending:false}).limit(100),
+     supabase.from("mf_partner_registry").select("*").order("display_name")
    ]);
-   const err=[leadsR.error,rewardsR.error,tasksR.error,outboxR.error].find(Boolean);if(err)throw err;
+    const err=[leadsR.error,rewardsR.error,tasksR.error,outboxR.error,programsR.error].find(Boolean);if(err)throw err;
    const rewards=rewardsR.data||[], leads=(leadsR.data||[]).map((l:any)=>({...l,reward_status:rewards.find((r:any)=>r.lead_id===l.id)?.status||null}));
-   return json({leads,activities:[...(tasksR.data||[]).map((t:any)=>({...t,kind:"research"})),...(outboxR.data||[]).map((o:any)=>({...o,kind:o.target_engine}))],metrics:{leads:leads.length,ready:leads.filter((l:any)=>l.review_status==="eligible").length,blocked:leads.filter((l:any)=>["duplicate","protected","dnc","needs_review"].includes(l.review_status)).length,paid:rewards.filter((r:any)=>r.status==="paid").length}})
+    return json({leads,programs:programsR.data||[],activities:[...(tasksR.data||[]).map((t:any)=>({...t,kind:"research"})),...(outboxR.data||[]).map((o:any)=>({...o,kind:o.target_engine}))],metrics:{leads:leads.length,ready:leads.filter((l:any)=>l.review_status==="eligible").length,blocked:leads.filter((l:any)=>["duplicate","protected","dnc","needs_review"].includes(l.review_status)).length,paid:rewards.filter((r:any)=>r.status==="paid").length}})
   }
   if(req.method!=="POST")return json({error:"Method not allowed"},405);
   const input=await req.json();
+   if(path.endsWith("/protection/import")){
+    const rows=Array.isArray(input.rows)?input.rows:[];
+    if(!input.complete||rows.length===0||rows.length>5000)return json({error:"Upload 1-5000 records and confirm the list is complete."},400);
+    const types=new Set(["customer","dnc","existing_contact","active_deal"]),unique=new Map<string,any>();
+    for(const row of rows){const name=String(row.entity_name||row.company||"").trim(),type=String(row.protection_type||row.type||"").trim(),domain=domainOf(String(row.domain||row.website||"")),email=norm(String(row.email||""));if(!name||!types.has(type))return json({error:"Each record needs an entity_name and a valid type: customer, dnc, existing_contact, or active_deal."},400);const key=[type,domain,email,name.toLowerCase()].join("|");unique.set(key,{entity_name:name,normalized_domain:domain||null,normalized_email:email||null,protection_type:type,source_ref:"operator_import"})}
+    const items=[...unique.values()];const ins=await supabase.from("mf_protected_entities").insert(items);if(ins.error)throw ins.error;
+    const state=await supabase.from("mf_system_state").update({protection_seeded:true,updated_at:new Date().toISOString()}).eq("id",true);if(state.error)throw state.error;
+    return json({imported:items.length,protection_seeded:true,message:"Protection list loaded. Review blocked leads before changing their status."},201)
+   }
+   if(path.endsWith("/program-status")){
+    const ids=new Set(["visual_factories","indeavor","dev_partners"]),statuses=new Set(["not_contacted","draft_saved","inquiry_sent","terms_received","eligible","registered","paused","not_eligible"]);
+    if(!ids.has(input.id)||!statuses.has(input.status))return json({error:"Unsupported partner program or status."},400);
+    const r=await supabase.from("mf_partner_registry").update({status:input.status,fee_notes:String(input.fee_notes||"").slice(0,2000),contact_email:String(input.contact_email||"").slice(0,200),updated_at:new Date().toISOString()}).eq("id",input.id).select("id,status,fee_notes,contact_email,updated_at").single();if(r.error)throw r.error;return json({program:r.data})
+   }
   if(path.endsWith("/leads")){
    const company=String(input.company||"").trim(), program=String(input.program||""), fitReason=String(input.fitReason||"").trim();
    if(!company||!fitReason||!(["Visual Factories","Indeavor","Dev Partners"].includes(program)))return json({error:"\uD68C\uC0AC, \uD504\uB85C\uADF8\uB7A8, \uC801\uD569 \uADFC\uAC70\uB97C \uD655\uC778\uD558\uC138\uC694."},400);
