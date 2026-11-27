@@ -7,7 +7,7 @@ window.jbroTrack=function(name,params){
  const details={...(params||{}),page_path:location.pathname};
  for(const key of ['utm_source','utm_medium','utm_campaign','utm_content']){
   const value=query.get(key);
-  if(value)details[key]=value;
+  if(value && /^[A-Za-z0-9_.-]{1,64}$/.test(value))details[key]=value;
  }
  window.dataLayer.push({event:name,...details});
  if(typeof window.gtag==='function')window.gtag('event',name,details);
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(dest.origin!==location.origin || !/\.html$/.test(dest.pathname))return;
     ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(k=>{
      const v=params.get(k);
-     if(v && !dest.searchParams.has(k))dest.searchParams.set(k,v);
+     if(v && /^[A-Za-z0-9_.-]{1,64}$/.test(v) && !dest.searchParams.has(k))dest.searchParams.set(k,v);
     });
     a.href=dest.href;
    }catch(_){}
@@ -64,7 +64,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 document.addEventListener('click',function(e){
  const a=e.target.closest('a');if(!a)return;
- if(a.dataset.trackEvent==='dp001_sample_download')window.jbroTrack('dp001_sample_download',{item_id:'DP-001'});
+ if(a.dataset.storeEvent)window.jbroTrack(a.dataset.storeEvent,{item_id:a.dataset.itemId});
+ else if(a.dataset.trackEvent==='dp001_sample_download')window.jbroTrack('dp001_sample_download',{item_id:'DP-001'});
  else if(a.dataset.trackEvent==='dp001_purchase_inquiry_click')window.jbroTrack('dp001_purchase_inquiry_click',{item_id:'DP-001'});
  else if(a.href.includes('JBRO_Free_Quote_Sample.csv'))window.jbroTrack('sample_download',{file_name:'JBRO_Free_Quote_Sample.csv'});
  else if(a.hostname==='open.kakao.com')window.jbroTrack('kakao_contact_click');
