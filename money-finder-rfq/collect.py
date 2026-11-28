@@ -14,11 +14,22 @@ def parse(data):
     if not rows: raise ValueError("No valid Atom entries")
     return list(rows.values())
 def main():
-    with urllib.request.urlopen(FEED,timeout=30) as r:
+    feed_request = urllib.request.Request(
+        FEED,
+        headers={"Accept": "application/atom+xml", "User-Agent": "JBRO-Money-Finder-RFQ/1.0"},
+    )
+    with urllib.request.urlopen(feed_request, timeout=30) as r:
         rows=parse(r.read(5000000))
     key=os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     url=os.environ["SUPABASE_URL"].rstrip("/")+"/rest/v1/mf_rfq_items?on_conflict=source,external_id"
-    req=urllib.request.Request(url,data=json.dumps(rows).encode(),headers={"apikey":key,"Authorization":"Bearer "+key,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"},method="POST")
+    headers = {
+        "apikey": key,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = "Bearer " + key
+    req = urllib.request.Request(url, data=json.dumps(rows).encode(), headers=headers, method="POST")
     with urllib.request.urlopen(req,timeout=30) as r:
         print("Upserted",len(rows),"RFQs; HTTP",r.status)
 if __name__=="__main__": main()
