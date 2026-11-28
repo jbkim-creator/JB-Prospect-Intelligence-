@@ -1,0 +1,23 @@
+name: MONEY FINDER RFQ
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */2 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: mf-rfq
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect public RFQs
+        env:
+          SUPABASE_URL: https://qydiivrneuhzrhpbmbei.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo 'Missing repository secret'; exit 1; }
+          python3 money-finder-rfq/collect.py
